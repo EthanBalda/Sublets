@@ -1,20 +1,32 @@
 -- Sublets · initial schema (Milestone 1)
 -- Campus-scoped, .edu-gated student sublet marketplace. v1: UCSD only.
 --
+-- File order
+--   1. Extensions
+--   2. Trigger function (referenced by table-attached triggers)
+--   3. Tables
+--   4. Indexes
+--   5. Triggers
+--   6. Helper functions (query profiles, so must come AFTER tables)
+--   7. Row-Level Security enablement
+--   8. Policies
+--
 -- Notes
 --   - profiles.user_id is intentionally NOT a foreign key to auth.users yet.
 --     Auth is implemented in a later milestone; the FK will be added then.
---     Until then, profile rows are linked to a uuid that will match auth.uid()
---     once the auth flow exists.
 --   - All timestamps are timestamptz.
---   - RLS is enabled on every table. Policies assume Supabase Auth
---     conventions (auth.uid()) and become enforceable when auth ships.
+--   - SQL-language functions parse their body at CREATE time, which is why
+--     current_profile_id() / is_admin() must be declared after public.profiles.
+
+-- ===========================================================================
+-- 1. Extensions
+-- ===========================================================================
 
 create extension if not exists pgcrypto;
 
--- ---------------------------------------------------------------------------
--- Helper functions
--- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- 2. Trigger function (no table references — safe to create early)
+-- ===========================================================================
 
 create or replace function public.tg_set_updated_at()
 returns trigger
@@ -26,32 +38,9 @@ begin
 end;
 $$;
 
-create or replace function public.current_profile_id()
-returns uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select id from public.profiles where user_id = auth.uid();
-$$;
-
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    (select is_admin from public.profiles where user_id = auth.uid()),
-    false
-  );
-$$;
-
--- ---------------------------------------------------------------------------
--- campuses
--- ---------------------------------------------------------------------------
+-- ===========================================================================
+-- 3. Tables
+-- ===========================================================================
 
 create table public.campuses (
   id              uuid primary key default gen_random_uuid(),
@@ -62,12 +51,6 @@ create table public.campuses (
   is_supported    boolean not null default false,
   created_at      timestamptz not null default now()
 );
-
-create index campuses_is_supported_idx on public.campuses (is_supported);
-
--- ---------------------------------------------------------------------------
--- profiles
--- ---------------------------------------------------------------------------
 
 create table public.profiles (
   id                        uuid primary key default gen_random_uuid(),
@@ -97,17 +80,6 @@ create table public.profiles (
   updated_at                timestamptz not null default now()
 );
 
-create index profiles_campus_id_idx on public.profiles (campus_id);
-create index profiles_is_admin_idx on public.profiles (is_admin) where is_admin = true;
-
-create trigger profiles_set_updated_at
-  before update on public.profiles
-  for each row execute function public.tg_set_updated_at();
-
--- ---------------------------------------------------------------------------
--- waitlist_entries
--- ---------------------------------------------------------------------------
-
 create table public.waitlist_entries (
   id                uuid primary key default gen_random_uuid(),
   email             text not null,
@@ -118,13 +90,6 @@ create table public.waitlist_entries (
   referral_source   text,
   created_at        timestamptz not null default now()
 );
-
-create index waitlist_entries_created_at_idx on public.waitlist_entries (created_at desc);
-create index waitlist_entries_campus_name_idx on public.waitlist_entries (campus_name);
-
--- ---------------------------------------------------------------------------
--- listings
--- ---------------------------------------------------------------------------
 
 create table public.listings (
   id                      uuid primary key default gen_random_uuid(),
@@ -158,19 +123,6 @@ create table public.listings (
   filled_at               timestamptz
 );
 
-create index listings_campus_status_idx on public.listings (campus_id, status);
-create index listings_owner_id_idx on public.listings (owner_id);
-create index listings_available_window_idx on public.listings (available_start_date, available_end_date);
-create index listings_is_featured_idx on public.listings (is_featured) where is_featured = true;
-
-create trigger listings_set_updated_at
-  before update on public.listings
-  for each row execute function public.tg_set_updated_at();
-
--- ---------------------------------------------------------------------------
--- listing_photos
--- ---------------------------------------------------------------------------
-
 create table public.listing_photos (
   id           uuid primary key default gen_random_uuid(),
   listing_id   uuid not null references public.listings(id) on delete cascade,
@@ -179,12 +131,6 @@ create table public.listing_photos (
   created_at   timestamptz not null default now()
 );
 
-create index listing_photos_listing_id_idx on public.listing_photos (listing_id, sort_order);
-
--- ---------------------------------------------------------------------------
--- favorites
--- ---------------------------------------------------------------------------
-
 create table public.favorites (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references public.profiles(id),
@@ -192,13 +138,6 @@ create table public.favorites (
   created_at   timestamptz not null default now(),
   unique (user_id, listing_id)
 );
-
-create index favorites_user_id_idx on public.favorites (user_id);
-create index favorites_listing_id_idx on public.favorites (listing_id);
-
--- ---------------------------------------------------------------------------
--- conversations
--- ---------------------------------------------------------------------------
 
 create table public.conversations (
   id           uuid primary key default gen_random_uuid(),
@@ -210,18 +149,6 @@ create table public.conversations (
   unique (listing_id, seeker_id, lister_id)
 );
 
-create index conversations_seeker_id_idx on public.conversations (seeker_id, updated_at desc);
-create index conversations_lister_id_idx on public.conversations (lister_id, updated_at desc);
-create index conversations_listing_id_idx on public.conversations (listing_id);
-
-create trigger conversations_set_updated_at
-  before update on public.conversations
-  for each row execute function public.tg_set_updated_at();
-
--- ---------------------------------------------------------------------------
--- messages
--- ---------------------------------------------------------------------------
-
 create table public.messages (
   id                uuid primary key default gen_random_uuid(),
   conversation_id   uuid not null references public.conversations(id) on delete cascade,
@@ -230,13 +157,6 @@ create table public.messages (
   read_at           timestamptz,
   created_at        timestamptz not null default now()
 );
-
-create index messages_conversation_id_idx on public.messages (conversation_id, created_at);
-create index messages_sender_id_idx on public.messages (sender_id);
-
--- ---------------------------------------------------------------------------
--- interest_requests
--- ---------------------------------------------------------------------------
 
 create table public.interest_requests (
   id             uuid primary key default gen_random_uuid(),
@@ -250,18 +170,6 @@ create table public.interest_requests (
   completed_at   timestamptz
 );
 
-create index interest_requests_listing_id_idx on public.interest_requests (listing_id);
-create index interest_requests_seeker_id_idx on public.interest_requests (seeker_id, status);
-create index interest_requests_lister_id_idx on public.interest_requests (lister_id, status);
-
-create trigger interest_requests_set_updated_at
-  before update on public.interest_requests
-  for each row execute function public.tg_set_updated_at();
-
--- ---------------------------------------------------------------------------
--- sublet_checklist_items
--- ---------------------------------------------------------------------------
-
 create table public.sublet_checklist_items (
   id                       uuid primary key default gen_random_uuid(),
   interest_request_id      uuid not null references public.interest_requests(id) on delete cascade,
@@ -272,17 +180,6 @@ create table public.sublet_checklist_items (
   created_at               timestamptz not null default now(),
   updated_at               timestamptz not null default now()
 );
-
-create index sublet_checklist_items_request_id_idx
-  on public.sublet_checklist_items (interest_request_id);
-
-create trigger sublet_checklist_items_set_updated_at
-  before update on public.sublet_checklist_items
-  for each row execute function public.tg_set_updated_at();
-
--- ---------------------------------------------------------------------------
--- reports
--- ---------------------------------------------------------------------------
 
 create table public.reports (
   id                  uuid primary key default gen_random_uuid(),
@@ -298,17 +195,6 @@ create table public.reports (
   updated_at          timestamptz not null default now()
 );
 
-create index reports_status_idx on public.reports (status, created_at desc);
-create index reports_reporter_id_idx on public.reports (reporter_id);
-
-create trigger reports_set_updated_at
-  before update on public.reports
-  for each row execute function public.tg_set_updated_at();
-
--- ---------------------------------------------------------------------------
--- analytics_events
--- ---------------------------------------------------------------------------
-
 create table public.analytics_events (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid references public.profiles(id),
@@ -317,12 +203,106 @@ create table public.analytics_events (
   created_at      timestamptz not null default now()
 );
 
+-- ===========================================================================
+-- 4. Indexes
+-- ===========================================================================
+
+create index campuses_is_supported_idx on public.campuses (is_supported);
+
+create index profiles_campus_id_idx on public.profiles (campus_id);
+create index profiles_is_admin_idx on public.profiles (is_admin) where is_admin = true;
+
+create index waitlist_entries_created_at_idx on public.waitlist_entries (created_at desc);
+create index waitlist_entries_campus_name_idx on public.waitlist_entries (campus_name);
+
+create index listings_campus_status_idx on public.listings (campus_id, status);
+create index listings_owner_id_idx on public.listings (owner_id);
+create index listings_available_window_idx on public.listings (available_start_date, available_end_date);
+create index listings_is_featured_idx on public.listings (is_featured) where is_featured = true;
+
+create index listing_photos_listing_id_idx on public.listing_photos (listing_id, sort_order);
+
+create index favorites_user_id_idx on public.favorites (user_id);
+create index favorites_listing_id_idx on public.favorites (listing_id);
+
+create index conversations_seeker_id_idx on public.conversations (seeker_id, updated_at desc);
+create index conversations_lister_id_idx on public.conversations (lister_id, updated_at desc);
+create index conversations_listing_id_idx on public.conversations (listing_id);
+
+create index messages_conversation_id_idx on public.messages (conversation_id, created_at);
+create index messages_sender_id_idx on public.messages (sender_id);
+
+create index interest_requests_listing_id_idx on public.interest_requests (listing_id);
+create index interest_requests_seeker_id_idx on public.interest_requests (seeker_id, status);
+create index interest_requests_lister_id_idx on public.interest_requests (lister_id, status);
+
+create index sublet_checklist_items_request_id_idx
+  on public.sublet_checklist_items (interest_request_id);
+
+create index reports_status_idx on public.reports (status, created_at desc);
+create index reports_reporter_id_idx on public.reports (reporter_id);
+
 create index analytics_events_event_name_idx
   on public.analytics_events (event_name, created_at desc);
 create index analytics_events_user_id_idx on public.analytics_events (user_id);
 
 -- ===========================================================================
--- Row-Level Security
+-- 5. Triggers (use tg_set_updated_at from step 2)
+-- ===========================================================================
+
+create trigger profiles_set_updated_at
+  before update on public.profiles
+  for each row execute function public.tg_set_updated_at();
+
+create trigger listings_set_updated_at
+  before update on public.listings
+  for each row execute function public.tg_set_updated_at();
+
+create trigger conversations_set_updated_at
+  before update on public.conversations
+  for each row execute function public.tg_set_updated_at();
+
+create trigger interest_requests_set_updated_at
+  before update on public.interest_requests
+  for each row execute function public.tg_set_updated_at();
+
+create trigger sublet_checklist_items_set_updated_at
+  before update on public.sublet_checklist_items
+  for each row execute function public.tg_set_updated_at();
+
+create trigger reports_set_updated_at
+  before update on public.reports
+  for each row execute function public.tg_set_updated_at();
+
+-- ===========================================================================
+-- 6. Helper functions (query public.profiles — must come AFTER it exists)
+-- ===========================================================================
+
+create or replace function public.current_profile_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select id from public.profiles where user_id = auth.uid();
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select is_admin from public.profiles where user_id = auth.uid()),
+    false
+  );
+$$;
+
+-- ===========================================================================
+-- 7. Row-Level Security enablement
 -- ===========================================================================
 
 alter table public.campuses                enable row level security;
@@ -337,6 +317,10 @@ alter table public.interest_requests       enable row level security;
 alter table public.sublet_checklist_items  enable row level security;
 alter table public.reports                 enable row level security;
 alter table public.analytics_events        enable row level security;
+
+-- ===========================================================================
+-- 8. Policies
+-- ===========================================================================
 
 -- ---------- campuses ----------
 
