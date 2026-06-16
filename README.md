@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sublets
 
-## Getting Started
+Verified student sublets, campus by campus.
 
-First, run the development server:
+Sublets is a mobile-first responsive web MVP that lets verified college students list and find short-term sublets at their own school. The v1 beta is scoped to UC San Diego (`ucsd.edu`); other students can join a waitlist.
+
+## Tech
+
+- Next.js 16 (App Router)
+- React 19
+- TypeScript (strict)
+- Tailwind CSS v4
+- Deploys on Vercel
+
+Supabase, auth, payments, and AI are intentionally **not** wired up yet — see `CLAUDE.md` for the full scope guardrails.
+
+## Local setup
+
+Requires Node.js 18.18+ (Next.js 16) and npm.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Other scripts:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build   # production build
+npm run start   # serve the production build
+npm run lint    # eslint
+```
 
-## Learn More
+## Project structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  (marketing)/        # public routes: /, /login, /waitlist
+  (app)/              # post-auth routes (currently placeholders)
+    explore/
+    saved/
+    listings/new/
+    listings/[id]/
+    messages/
+    messages/[conversationId]/
+    onboarding/
+    dashboard/
+    admin/
+components/           # shared UI (nav, layouts, placeholders)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The `(marketing)` and `(app)` folders are Next.js route groups — they don't show up in URLs. They exist so the public site and the authed app can have different chrome.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Status
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Milestone 0: project foundation, navigation, placeholder routes, landing page. Auth, data, and feature pages land in later milestones.
