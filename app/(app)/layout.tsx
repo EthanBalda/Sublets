@@ -1,10 +1,16 @@
 import { AppBottomTabs, AppTopBar } from "@/components/AppNav";
+import { requireOnboardedUser } from "@/lib/auth/session";
 
-export default function AppLayout({
+// Gated routes vary per user — never prerender them.
+export const dynamic = "force-dynamic";
+
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireOnboardedUser();
+
   return (
     <>
       <AppTopBar />
