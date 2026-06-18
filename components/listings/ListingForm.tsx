@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ListingFormState } from "@/lib/listings/actions";
+import type { ListingStatus } from "@/lib/supabase/types";
 import {
   APPLIANCE_OPTIONS,
   HOUSING_TYPES,
@@ -43,15 +44,19 @@ type ListingFormProps = {
     formData: FormData,
   ) => Promise<ListingFormState>;
   initialValues?: ListingFormValues;
-  submitLabels?: { draft: string; publish: string };
+  // Undefined for the create flow; set on the edit page. When the listing
+  // is non-draft we render one validating "Save changes" button instead of
+  // the draft / publish pair, to avoid silently coercing live content.
+  currentStatus?: ListingStatus;
 };
 
 export function ListingForm({
   action,
   initialValues = {},
-  submitLabels = { draft: "Save as draft", publish: "Publish listing" },
+  currentStatus,
 }: ListingFormProps) {
   const [state, formAction] = useActionState(action, initialState);
+  const isDraftOrNew = currentStatus === undefined || currentStatus === "draft";
 
   return (
     <form action={formAction} className="flex flex-col gap-8">
@@ -247,8 +252,14 @@ export function ListingForm({
       ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <SubmitButton mode="draft" label={submitLabels.draft} />
-        <SubmitButton mode="publish" label={submitLabels.publish} primary />
+        {isDraftOrNew ? (
+          <>
+            <SubmitButton mode="draft" label="Save as draft" />
+            <SubmitButton mode="publish" label="Publish listing" primary />
+          </>
+        ) : (
+          <SubmitButton mode="publish" label="Save changes" primary />
+        )}
       </div>
     </form>
   );

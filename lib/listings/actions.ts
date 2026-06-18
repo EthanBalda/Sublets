@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOnboardedUser } from "@/lib/auth/session";
 import type {
   ListingStatus,
+  Tables,
   TablesInsert,
   TablesUpdate,
 } from "@/lib/supabase/types";
@@ -142,6 +143,15 @@ function validateForPublish(raw: RawListing): Record<string, string> {
   return errors;
 }
 
+// Same checks as validateForPublish, but takes a persisted listings row so
+// the dashboard's "Publish" button can re-validate without going through
+// the form.
+function validateForPublishRow(
+  row: Tables<"listings">,
+): Record<string, string> {
+  return validateForPublish({ ...row, photo_urls: [] });
+}
+
 // For drafts the schema still requires several NOT NULL columns, so we
 // supply harmless defaults for anything the user left blank. The form
 // validates again before publish.
@@ -272,18 +282,47 @@ export async function updateListing(
   const mode = formData.get("mode") === "publish" ? "publish" : "draft";
   const raw = parseRawListing(formData);
 
-  if (mode === "publish") {
+  // Need the current status before we know whether to validate or coerce.
+  // Edits to a non-draft listing always validate — anything else risks
+  // overwriting live content with coerced defaults like "Untitled listing".
+  const supabase = await createSupabaseServerClient();
+  const { data: current } = await supabase
+    .from("listings")
+    .select("status")
+    .eq("id", listingId)
+    .eq("owner_id", session.profile.id)
+    .maybeSingle();
+
+  if (!current) {
+    return {
+      status: "error",
+      error: "Listing not found — it may have been removed.",
+    };
+  }
+
+  const isDraft = current.status === "draft";
+  const requireValidation = !isDraft || mode === "publish";
+
+  if (requireValidation) {
     const fieldErrors = validateForPublish(raw);
     if (Object.keys(fieldErrors).length > 0) {
       return {
         status: "error",
         fieldErrors,
-        error: "Fix the highlighted fields, then publish.",
+        error: isDraft
+          ? "Fix the highlighted fields, then publish."
+          : "Fix the highlighted fields before saving — this listing is live.",
       };
     }
   }
 
-  const values = mode === "publish" ? raw : coerceForDraft(raw);
+  const values = requireValidation ? raw : coerceForDraft(raw);
+
+  // Status only changes here when a draft is being published. Other
+  // transitions (pause, fill, re-publish) live on the dashboard.
+  const newStatus: ListingStatus | undefined =
+    isDraft && mode === "publish" ? "published" : undefined;
+
   const update: TablesUpdate<"listings"> = {
     title: values.title,
     housing_type: values.housing_type,
@@ -306,10 +345,9 @@ export async function updateListing(
     appliances: values.appliances,
     description: values.description,
     lease_status: values.lease_status,
-    status: mode === "publish" ? "published" : undefined,
+    status: newStatus,
   };
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("listings")
     .update(update)
@@ -335,6 +373,12 @@ export async function updateListing(
 
 // Lifecycle transitions: publish, pause, mark filled, revert to draft.
 // Allowed targets are a deliberately narrow subset of ListingStatus.
+//
+// Publishing (and re-publishing) re-runs validation against the persisted
+// row so a draft with missing required fields can't be flipped to published
+// straight from the dashboard. Errors surface as thrown exceptions; the
+// dashboard wraps these in per-row forms so the default Next error UI takes
+// over (good enough for v1, replace with toasts later).
 export async function changeListingStatus(
   listingId: string,
   target: ListingStatus,
@@ -344,10 +388,33 @@ export async function changeListingStatus(
   }
   const session = await requireOnboardedUser();
   const supabase = await createSupabaseServerClient();
+
+  if (target === "published") {
+    const { data: row } = await supabase
+      .from("listings")
+      .select("*")
+      .eq("id", listingId)
+      .eq("owner_id", session.profile.id)
+      .maybeSingle();
+    if (!row) throw new Error("Listing not found.");
+    const errors = validateForPublishRow(row);
+    if (Object.keys(errors).length > 0) {
+      throw new Error(
+        "This listing has missing required fields. Open Edit to complete it before publishing.",
+      );
+    }
+  }
+
   const patch: TablesUpdate<"listings"> = { status: target };
   if (target === "filled") {
     patch.filled_at = new Date().toISOString();
   }
+  if (target === "published") {
+    // Clear the filled timestamp so re-published rows aren't stuck looking
+    // historically filled in audits.
+    patch.filled_at = null;
+  }
+
   const { error } = await supabase
     .from("listings")
     .update(patch)

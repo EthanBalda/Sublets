@@ -39,7 +39,7 @@ export default async function EditListingPage({ params }: EditPageProps) {
       <div className="mt-8">
         <ListingForm
           action={updateListing.bind(null, listing.id)}
-          submitLabels={{ draft: "Save as draft", publish: "Publish changes" }}
+          currentStatus={listing.status}
           initialValues={{
             title: listing.title,
             housing_type: listing.housing_type,
