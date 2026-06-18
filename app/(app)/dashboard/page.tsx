@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import { requireOnboardedUser } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/actions";
+import { getOwnListings } from "@/lib/listings/queries";
+import { MyListingsSection } from "@/components/listings/MyListingsSection";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const session = await requireOnboardedUser();
   const { profile, email } = session;
+  const listings = await getOwnListings(profile.id);
 
   return (
-    <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-16">
+    <section className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
       <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">
         Sublets · account
       </p>
@@ -20,24 +23,32 @@ export default async function DashboardPage() {
         Signed in as <span className="font-medium">{email}</span> · {session.campus.name}
       </p>
 
-      <dl className="mt-8 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-        <Field label="Role">{profile.role}</Field>
-        <Field label="Major">{profile.major}</Field>
-        <Field label="Graduation year">{profile.graduation_year}</Field>
-        <Field label="Email verification">{profile.verification_status}</Field>
-        <Field label="ID verification">{profile.id_verification_status}</Field>
-      </dl>
-
-      <div className="mt-10">
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--border)] px-5 text-sm font-medium hover:bg-black/5"
-          >
-            Sign out
-          </button>
-        </form>
+      <div className="mt-8">
+        <MyListingsSection listings={listings} />
       </div>
+
+      <details className="mt-10 rounded-2xl border border-[var(--border)] p-4">
+        <summary className="cursor-pointer text-sm font-medium">
+          Account details
+        </summary>
+        <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+          <Field label="Role">{profile.role}</Field>
+          <Field label="Major">{profile.major}</Field>
+          <Field label="Graduation year">{profile.graduation_year}</Field>
+          <Field label="Email verification">{profile.verification_status}</Field>
+          <Field label="ID verification">{profile.id_verification_status}</Field>
+        </dl>
+        <div className="mt-6">
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--border)] px-5 text-sm font-medium hover:bg-black/5"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </details>
 
       <p className="mt-10 text-xs leading-5 text-[var(--muted)]">
         Sublets currently verifies student email only. Government ID

@@ -122,6 +122,39 @@ update public.profiles set is_admin = true where user_id = '<your auth user id>'
 
 You can find your auth user id in **Authentication → Users**.
 
+## Creating and managing listings (Milestone 3)
+
+Once signed in and onboarded, a UCSD profile can post sublets.
+
+**Post a draft:**
+
+1. Click **New listing** on `/dashboard` (or visit `/listings/new` directly).
+2. Fill any subset of the fields — draft saves don't require validation.
+3. Click **Save as draft**. You land back on `/dashboard` with the listing visible under *Your listings* with a `Draft` badge.
+
+**Publish:**
+
+- From the new-listing form click **Publish listing**. The action validates required fields (title, housing type, monthly rent, utilities, dates, neighborhood, bedrooms, bathrooms, description, lease status); errors render inline.
+- From the dashboard you can publish a draft via the **Publish** button on its row.
+- On publish, you're redirected to `/listings/[id]` (the public detail view).
+
+**Manage a listing:**
+
+Each row on the dashboard exposes status-aware actions:
+
+| State | Actions |
+|---|---|
+| Draft | View not shown · Edit · Publish · Delete |
+| Published | View · Edit · Pause · Mark filled |
+| Paused | View · Edit · Re-publish · Mark filled |
+| Filled / Expired | View · Edit · Re-publish |
+
+**Edit:** `/listings/[id]/edit` pre-populates the form with current values + existing photo URLs. The owner check is enforced server-side; visiting another user's edit URL returns the listings `not-found` page.
+
+**Private vs public address:** the form has both *Neighborhood* (public) and *Exact address* (private — only you can see this). The public detail query at `/listings/[id]` explicitly omits `address_private`, so non-owners can never read it via the app even if RLS were misconfigured.
+
+**Detail page placeholders:** `/listings/[id]` shows Save / Message / Report buttons in a visibly disabled state with tooltips — those flows ship in later milestones.
+
 ## Project structure
 
 ```
@@ -146,8 +179,12 @@ lib/
   campus.ts            # .edu / ucsd.edu domain classification
   env.ts               # env access, throws lazily on missing Supabase config
   auth/
-    actions.ts         # startSignIn, signOut server actions
+    actions.ts         # emailPasswordAuth, signOut server actions
     session.ts         # requireUser / requireOnboardedUser / requireAdminUser
+  listings/
+    actions.ts         # createListing, updateListing, changeListingStatus, deleteListing
+    queries.ts         # owner + public listing queries (public query omits address_private)
+    constants.ts       # housing type, utilities, lease status, appliances option sets
   supabase/
     server.ts          # createSupabaseServerClient — Server Components / Route Handlers
     browser.ts         # getSupabaseBrowserClient — Client Components
@@ -166,5 +203,6 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 - **Milestone 0** ✓ project foundation, navigation, placeholder routes, landing page.
 - **Milestone 1** ✓ Supabase schema, RLS scaffolding, seed data, typed client helpers.
 - **Milestone 2** ✓ auth, .edu / UCSD access control, onboarding, route protection.
+- **Milestone 3** ✓ listing creation, drafts/publish lifecycle, owner management, public detail page with private-address omission.
 
-Listing creation, messaging, favorites, reports, and analytics land in later milestones.
+Explore filters, favorites, messaging, reports, and analytics land in later milestones.
