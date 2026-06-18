@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FavoriteButton } from "@/components/listings/FavoriteButton";
 import { PlaceholderActionButtons } from "@/components/listings/PlaceholderActionButtons";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { isListingSaved } from "@/lib/listings/favorites";
 import {
   getListerProfileCard,
   getListingPhotos,
@@ -34,6 +36,7 @@ export default async function ListingDetailPage({
   const isOwner = listing.owner_id === session.profile.id;
   const photos = await getListingPhotos(listing.id);
   const lister = await getListerProfileCard(listing.owner_id);
+  const saved = await isListingSaved(session.profile.id, listing.id);
 
   return (
     <section className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">
@@ -65,7 +68,12 @@ export default async function ListingDetailPage({
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap gap-2">
+        <FavoriteButton
+          listingId={listing.id}
+          initialSaved={saved}
+          variant="pill"
+        />
         <PlaceholderActionButtons />
       </div>
 

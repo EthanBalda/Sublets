@@ -3,7 +3,7 @@ import type { Tables } from "@/lib/supabase/types";
 
 // Columns safe to show on the public detail view. Omits address_private —
 // that field belongs only to the owner's edit/dashboard surface.
-const PUBLIC_LISTING_COLUMNS = `
+export const PUBLIC_LISTING_COLUMNS = `
   id, owner_id, campus_id,
   title, housing_type, monthly_rent, security_deposit, utilities_included,
   available_start_date, available_end_date,
@@ -88,6 +88,28 @@ export async function getListingPhotos(
     .order("sort_order", { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+// Batch-fetch the cover photo (lowest sort_order) per listing for explore
+// and /saved card grids. Returns a Map keyed by listing_id.
+export async function getPrimaryPhotos(
+  listingIds: string[],
+): Promise<Map<string, string>> {
+  if (listingIds.length === 0) return new Map();
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("listing_photos")
+    .select("listing_id, storage_url, sort_order")
+    .in("listing_id", listingIds)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (!map.has(row.listing_id)) {
+      map.set(row.listing_id, row.storage_url);
+    }
+  }
+  return map;
 }
 
 export async function getListerProfileCard(

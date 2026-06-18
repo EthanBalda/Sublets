@@ -1,14 +1,12 @@
-// Buttons rendered on the listing detail page for actions that don't ship
-// in this milestone. Each button is intentionally disabled with a tooltip
-// so the affordance is visible without misleading the user.
+// Disabled placeholders for actions that don't ship in this milestone.
+// Save is real (see FavoriteButton) — Message and Report stay placeholders.
 
 export function PlaceholderActionButtons() {
   return (
-    <div className="flex flex-wrap gap-2">
-      <DisabledButton label="Save" tip="Favorites ship in a later milestone." />
+    <>
       <DisabledButton label="Message" tip="Messaging ships in a later milestone." />
       <DisabledButton label="Report" tip="Reporting ships in a later milestone." />
-    </div>
+    </>
   );
 }
 

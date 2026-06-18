@@ -155,6 +155,38 @@ Each row on the dashboard exposes status-aware actions:
 
 **Detail page placeholders:** `/listings/[id]` shows Save / Message / Report buttons in a visibly disabled state with tooltips — those flows ship in later milestones.
 
+## Explore, filters, save (Milestone 4)
+
+Once you have a couple of published listings (seed data + anything you posted) you can exercise the marketplace surface.
+
+**Browse:** `/explore` shows every `status = 'published'` listing for your campus. Drafts/paused/filled/expired/removed listings never appear here.
+
+**Filter:** click **Filters**. The form covers price range, available-by / through-at-least dates, housing type, lease status, distance-contains text (e.g. type `walk` to only show walking-distance listings), and on/off toggles for furnished / parking / pets / room-sharing. Click **Apply filters** to push a clean querystring (`/explore?max_price=2000&furnished=1` etc.) — the URL is shareable. **Reset** wipes everything.
+
+**Sort:** the sort dropdown applies on change. Options:
+
+- **Newest** (default) — `created_at` desc.
+- **Best match** — rules-based score against your profile preferences (`pets_preference` vs `pets_allowed`, `room_sharing_preference` vs `room_sharing_required`). If you haven't set either preference, falls back to newest. Not AI, just deterministic — see `lib/listings/bestMatch.ts`.
+- **Lowest price** — `monthly_rent` asc.
+- **Earliest available** — `available_start_date` asc.
+- **Closest to campus** — best-effort. `distance_to_campus` is free text (e.g. "5 min walk"), so we extract the leading integer; listings without a parseable number sink to the end of the list. Documented in `lib/listings/explore.ts:parseDistanceMinutes`.
+
+**Save / unsave:** tap the heart on any listing card or the **Save** pill on `/listings/[id]`. Optimistic UI flips the icon immediately; the server action `toggleFavorite` writes to `public.favorites` (unique on `(user_id, listing_id)`). If the insert races against itself the conflict is swallowed silently.
+
+**Saved page:** `/saved` shows your favorites in reverse-favorited order. Listings that left `published` since you saved them still appear with a status badge (Paused / Filled / Expired / Removed) so you know what happened.
+
+**Empty + error states:**
+
+| Surface | Trigger | Copy |
+|---|---|---|
+| `/explore` no filters | no published listings exist | "No listings yet — be the first." |
+| `/explore` with filters | filters too narrow | "No listings match these filters" + Reset button |
+| `/explore` load failure | DB error | "We couldn't load listings" red panel |
+| `/saved` empty | no favorites | "You haven't saved any listings yet." |
+| `/saved` load failure | DB error | "We couldn't load your saved listings" red panel |
+
+**Privacy:** both `/explore` and `/saved` go through the same column-projected query (`PUBLIC_LISTING_COLUMNS`) that omits `address_private`. The owner's edit form is the only surface where the private address is ever fetched.
+
 ## Project structure
 
 ```
@@ -185,6 +217,9 @@ lib/
     actions.ts         # createListing, updateListing, changeListingStatus, deleteListing
     queries.ts         # owner + public listing queries (public query omits address_private)
     constants.ts       # housing type, utilities, lease status, appliances option sets
+    explore.ts         # filter / sort logic for /explore
+    favorites.ts       # toggleFavorite, getSavedListings, getFavoriteListingIds
+    bestMatch.ts       # rules-based preference scoring (not AI)
   supabase/
     server.ts          # createSupabaseServerClient — Server Components / Route Handlers
     browser.ts         # getSupabaseBrowserClient — Client Components
@@ -204,5 +239,6 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 - **Milestone 1** ✓ Supabase schema, RLS scaffolding, seed data, typed client helpers.
 - **Milestone 2** ✓ auth, .edu / UCSD access control, onboarding, route protection.
 - **Milestone 3** ✓ listing creation, drafts/publish lifecycle, owner management, public detail page with private-address omission.
+- **Milestone 4** ✓ explore + filters + sort, rules-based best-match, favorites (save/unsave + /saved page).
 
-Explore filters, favorites, messaging, reports, and analytics land in later milestones.
+Messaging, interest requests, reports, and analytics land in later milestones.
