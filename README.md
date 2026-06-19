@@ -262,6 +262,74 @@ A typical flow against your Supabase project:
 - `address_private` continues to be excluded everywhere via `PUBLIC_LISTING_COLUMNS`. The request detail page, thread page, and dashboard rows all use the same projection.
 - Conversation and request access is double-gated: RLS in Postgres + an explicit `seeker_id === me || lister_id === me` check in the query helpers. Non-participants hitting URLs they shouldn't see get the not-found page, never a partial render.
 
+## Reports and admin moderation (Milestone 6)
+
+### Submitting reports
+
+Three entry points, all available to authenticated, onboarded, non-suspended UCSD users:
+
+1. **Listing report** — on `/listings/[id]`, click **Report** (next to Save / Message / Request). Hidden when you're the listing owner.
+2. **Conversation report** — on `/messages/[conversationId]`, click **Report conversation** under the listing header. Server-side check rejects non-participants.
+3. **User report** — on the listing detail page's lister profile card, click **Report this student**. Hidden when the lister is you.
+
+All three open the same inline form: a *Reason* dropdown (Scam suspicion / Inaccurate listing / Harassment / Duplicate listing / No longer available / Other) and an optional *Details* textarea (2000 chars). Empty reasons are rejected. On success the button becomes a green "Report sent" badge.
+
+### Making yourself admin
+
+`is_admin` is not exposed in the app UI by design. Flip it via SQL editor on Supabase:
+
+```sql
+update public.profiles set is_admin = true where user_id = '<your auth user id>';
+```
+
+You can find your auth user id in **Supabase Dashboard → Authentication → Users**. Once flipped, refresh `/admin` — you should land on the moderation dashboard.
+
+Non-admins hitting `/admin` are redirected to `/dashboard` via the `requireAdminUser` guard, with no UI hint that the page exists.
+
+### Admin moderation dashboard
+
+`/admin` has three stacked sections with their own filter pills:
+
+- **Reports** — defaults to `open`. Each card shows status, reason, full details, reporter, reported user (if present), linked listing, and a conversation summary (participant names + listing) when applicable. Below: an *Admin notes* textarea (Save notes) and three status actions: **Mark reviewing**, **Resolve**, **Dismiss**. The button matching the current status is disabled.
+- **Listings** — every listing across every status. Filter pills cover all 6 statuses + All. Each row links to the public listing page, shows the owner, status badge, and exposes **Remove** (`status='removed'`) or **Restore to paused** (`status='paused'`) depending on current state. Restore deliberately *doesn't* re-publish — the owner has to do that explicitly from their dashboard.
+- **Users** — all profiles. Filter pills: All / Active / Suspended. Each row shows name, role, major, grad year, admin/suspended/you badges, current email verification, ID verification status dropdown (Not started / Pending manual review / Verified / Rejected — manual tracking only, no IDs are collected), and a Suspend / Unsuspend button. **You can't suspend your own account from the UI** — the action rejects it.
+
+Each list is capped at 50 rows; tighten the filter to see different slices.
+
+### End-to-end manual test
+
+A typical run-through assuming two test users (A and B) and one admin user (could be A):
+
+1. Sign in as B. Visit one of A's published listings → click **Report** → pick *Inaccurate listing* → optional details → **Submit report**. Card flips to "Report sent."
+2. Sign out, log in as the admin. Visit `/admin`. Under Reports / Open you should see the new report.
+3. Click **Save notes** with a quick triage note. Click **Mark reviewing**. The card moves to the Reviewing filter pill.
+4. Under Listings, find the reported listing → click **Remove**. The listing now has `status = removed`. Visit `/explore` — it's gone. Visit `/listings/[id]` — still loads for admin (and the owner), but doesn't surface anywhere browsable.
+5. Back on `/admin`, switch the Listings filter to **Removed**, click **Restore to paused**. Listing is now `paused` — still hidden from explore. Owner sees the *Paused* state on their dashboard and can re-publish via the existing edit flow.
+6. Under Users, find user B → click **Suspend**. B's row now shows a *Suspended* badge. Sign in as B → any gated page bounces to `/suspended`.
+7. Back as admin, click **Unsuspend** → user B can browse again.
+8. Change B's *ID status* dropdown from `Not started` to `Verified`. Refresh — the change persists.
+9. Resolve the report from step 1 with **Resolve**. Card moves to the Resolved pill.
+
+### Privacy in admin moderation
+
+- Conversation summaries in report cards show participants + listing only — **the messages themselves aren't surfaced**. RLS still blocks admins from reading `messages` rows of conversations they're not in, so a malicious admin can't read DMs without explicit SQL access.
+- Listings in admin lists go through the unmodified `listings` table (admin sees all columns including `address_private`). The admin row UI does NOT render `address_private` — admins click through to the listing detail page (which uses the same public projection) if they want to see public info.
+- No government IDs are collected or uploaded. `id_verification_status` is a free-form status flag for admins to record what they verified out-of-band.
+
+### Error and empty states
+
+| Surface | Trigger | Copy |
+|---|---|---|
+| Report form | empty reason / invalid reason | inline red text in form |
+| Report form | conversation report by non-participant | "You can only report conversations you're a participant of." |
+| `/admin` reports section | no rows for filter | "No reports in status …" |
+| `/admin` listings section | no rows for filter | "No listings in status …" |
+| `/admin` users section | no rows for filter | "No users match this filter." |
+| `/admin` report card | status-update failure | inline "Couldn't update status." |
+| `/admin` listing row | remove/restore failure | inline "Couldn't update listing." |
+| `/admin` user row | suspend / verification failure | inline error text (own-account suspension shows the specific message) |
+| `/admin` for non-admins | not is_admin | redirect to `/dashboard` (no UI hint) |
+
 ## Project structure
 
 ```
@@ -302,6 +370,12 @@ lib/
     queries.ts         # incoming/outgoing lists, request details, checklist items
     actions.ts         # create / accept / decline / cancel / toggleChecklistItem / complete
     constants.ts       # 7 default checklist items, status labels + tones
+  reports/
+    actions.ts         # createReport (listing / conversation / user targets)
+    constants.ts       # 6 spec'd reasons, status labels + tones
+  admin/
+    queries.ts         # getReports / getAllListings / getAllProfiles (with filters)
+    actions.ts         # updateReportStatus / updateReportNotes / removeListing / restoreListing / setUserSuspension / setIdVerificationStatus
   supabase/
     server.ts          # createSupabaseServerClient — Server Components / Route Handlers
     browser.ts         # getSupabaseBrowserClient — Client Components
@@ -323,5 +397,6 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 - **Milestone 3** ✓ listing creation, drafts/publish lifecycle, owner management, public detail page with private-address omission.
 - **Milestone 4** ✓ explore + filters + sort, rules-based best-match, favorites (save/unsave + /saved page).
 - **Milestone 5** ✓ messaging (conversation list + thread + composer), interest requests (create/accept/decline/cancel), sublet checklist, complete → listing filled.
+- **Milestone 6** ✓ user reports (listing/conversation/user), admin moderation dashboard, listing remove/restore, user suspend + manual id_verification_status.
 
-Reports, admin moderation, and analytics land in later milestones.
+Analytics dashboard lands in a later milestone.

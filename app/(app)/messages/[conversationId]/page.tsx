@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MessageComposer } from "./MessageComposer";
+import { ReportButton } from "@/components/reports/ReportButton";
 import { requireOnboardedUser } from "@/lib/auth/session";
 import {
   getConversationDetails,
@@ -60,6 +61,12 @@ export default async function ConversationThreadPage({
             {convo.listing.neighborhood}
           </p>
         ) : null}
+        <div className="mt-3">
+          <ReportButton
+            target={{ kind: "conversation", conversationId: convo.id }}
+            variant="link"
+          />
+        </div>
       </header>
 
       <div className="my-4 flex flex-1 flex-col gap-2">

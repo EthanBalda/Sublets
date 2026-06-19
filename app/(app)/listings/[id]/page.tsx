@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FavoriteButton } from "@/components/listings/FavoriteButton";
 import { MessageButton } from "@/components/listings/MessageButton";
-import { PlaceholderActionButtons } from "@/components/listings/PlaceholderActionButtons";
 import { RequestButton } from "@/components/listings/RequestButton";
+import { ReportButton } from "@/components/reports/ReportButton";
 import { requireOnboardedUser } from "@/lib/auth/session";
 import { isListingSaved } from "@/lib/listings/favorites";
 import {
@@ -82,7 +82,11 @@ export default async function ListingDetailPage({
             <RequestButton listingId={listing.id} />
           </>
         ) : null}
-        <PlaceholderActionButtons />
+        {!isOwner ? (
+          <ReportButton
+            target={{ kind: "listing", listingId: listing.id }}
+          />
+        ) : null}
       </div>
 
       <Divider />
@@ -135,7 +139,12 @@ export default async function ListingDetailPage({
 
       <Divider />
 
-      {lister ? <ListerCard lister={lister} /> : null}
+      {lister ? (
+        <ListerCard
+          lister={lister}
+          currentProfileId={session.profile.id}
+        />
+      ) : null}
 
       <p className="mt-8 text-xs leading-5 text-[var(--muted)]">
         Sublets helps organize the sublet process. It does not provide legal
@@ -217,9 +226,12 @@ function Divider() {
 
 function ListerCard({
   lister,
+  currentProfileId,
 }: {
   lister: NonNullable<Awaited<ReturnType<typeof getListerProfileCard>>>;
+  currentProfileId: string;
 }) {
+  const showReport = lister.id !== currentProfileId;
   return (
     <section className="rounded-2xl border border-[var(--border)] p-4">
       <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">
@@ -239,6 +251,14 @@ function ListerCard({
       </p>
       {lister.bio ? (
         <p className="mt-3 text-sm leading-6 text-[var(--foreground)]">{lister.bio}</p>
+      ) : null}
+      {showReport ? (
+        <div className="mt-3">
+          <ReportButton
+            target={{ kind: "user", userId: lister.id }}
+            variant="link"
+          />
+        </div>
       ) : null}
     </section>
   );
