@@ -187,6 +187,81 @@ Once you have a couple of published listings (seed data + anything you posted) y
 
 **Privacy:** both `/explore` and `/saved` go through the same column-projected query (`PUBLIC_LISTING_COLUMNS`) that omits `address_private`. The owner's edit form is the only surface where the private address is ever fetched.
 
+## Messaging, requests, and checklist (Milestone 5)
+
+Two flows ship in this milestone — both are gated to authenticated, onboarded, non-suspended UCSD users on published listings only.
+
+### Messaging
+
+**Start a conversation:** on `/listings/[id]` (someone else's published listing), click **Message**. A `conversations` row is created or reused for `(listing, seeker=you, lister=owner)` and you land on `/messages/[conversationId]`. Re-clicking from the same listing routes back to the same thread — uniqueness is enforced by the schema's `unique(listing_id, seeker_id, lister_id)`.
+
+**Inbox:** `/messages` lists conversations newest-first by `updated_at`. Each row shows the other participant, the listing title, a one-line preview of the latest message, and a status badge if the listing left `published`.
+
+**Thread:** `/messages/[conversationId]` shows messages chronologically. Your messages are right-aligned and accent-colored; the other side is left-aligned grey. The composer below sends to the `messages` table and bumps `conversations.updated_at`. Empty thread copy reads: *"Start the conversation by asking about availability, dates, or lease approval."*
+
+**Hard cases:**
+
+- You can't message your own listing (the button is hidden when `owner_id === your profile.id`; the action also rejects).
+- You can't message about a draft/paused/filled/expired/removed listing — the button is hidden when `status !== 'published'`.
+- Visiting `/messages/[id]` for a conversation you're not in returns the listing's not-found page.
+
+### Interest requests
+
+**Send a request:** on a non-owned published listing, click **Request to sublet** to expand an inline form with an optional message. Submitting creates an `interest_requests` row with `status='pending'` and redirects to `/requests/[id]`. If you already have a `pending` or `accepted` request for the same listing, you're redirected to the existing one instead of creating a duplicate.
+
+**Lister view:** `/dashboard` shows incoming requests under *Incoming requests*. Open one to **Accept** or **Decline**.
+
+**Seeker view:** `/dashboard` shows your outgoing requests under *Your requests*. Pending requests can be **Cancelled**.
+
+**Accept → checklist:** when the lister accepts, the request flips to `status='accepted'` and the 7 default checklist items are installed (idempotent — safe to re-trigger):
+
+- Confirm dates
+- Confirm rent
+- Confirm deposit
+- Confirm roommate approval
+- Confirm landlord approval
+- Confirm agreement signed outside platform
+- Confirm move-in/move-out plan
+
+Each row has a *Seeker* and a *Lister* toggle. You can only toggle your own side; the other side renders as a non-interactive indicator. The checklist legal/safety disclaimer is rendered directly below the items.
+
+**Complete the sublet:** once every item has both sides checked, the lister sees **Mark sublet completed** enabled. Clicking it:
+
+- Sets `interest_requests.status = 'completed'` + `completed_at = now()`
+- Sets `listings.status = 'filled'` + `filled_at = now()`
+
+Sublets does not process payments and does not generate legal documents — the checklist coordinates everything that happens *off-platform*.
+
+### End-to-end manual test
+
+A typical flow against your Supabase project:
+
+1. Sign in as a UCSD user (User A) and post a listing. Publish it.
+2. Sign out, sign in as a second UCSD user (User B). Visit the listing. Click **Message** → land on `/messages/[id]`, send a few messages, watch them appear immediately.
+3. From the same listing, click **Request to sublet** → optional note → **Send request**. Land on `/requests/[id]` in `Pending` state. (User B sees the request under *Your requests* on the dashboard.)
+4. Sign back in as User A. `/dashboard` shows the request under *Incoming requests*. Open it → **Accept**. Page reloads with the checklist installed.
+5. As User A, toggle a few items on the *Lister (you)* side. Sign in as User B, toggle the *Seeker (you)* sides on the same items.
+6. Finish all 14 toggles (7 items × 2 sides). As User A, **Mark sublet completed** becomes enabled — click it. The request moves to `Completed`; the listing flips to `Filled` (visible on `/explore` as gone, on `/dashboard` with a `Filled` badge).
+
+### Error and empty states
+
+| Surface | Trigger | Copy |
+|---|---|---|
+| `/messages` empty | no conversations | "You don't have any messages yet." + Browse Explore |
+| `/messages` load failure | DB error | "We couldn't load your messages" panel |
+| Thread empty | no messages sent | "Start the conversation by asking about availability, dates, or lease approval." |
+| Send-message failure | empty body / too long / DB error | inline red text above the composer |
+| Unauthorized conversation | non-participant URL guess | not-found page |
+| Create-request failure | non-published listing / self-request / DB error | inline red text in the request form |
+| Unauthorized request | non-participant URL guess | request not-found page |
+| Accept/decline/cancel/complete failure | wrong role / wrong status / DB error | Next default error UI (action throws) |
+| Toggle checklist failure | network blip | inline rollback + "Couldn't update — try again." |
+
+### Privacy
+
+- `address_private` continues to be excluded everywhere via `PUBLIC_LISTING_COLUMNS`. The request detail page, thread page, and dashboard rows all use the same projection.
+- Conversation and request access is double-gated: RLS in Postgres + an explicit `seeker_id === me || lister_id === me` check in the query helpers. Non-participants hitting URLs they shouldn't see get the not-found page, never a partial render.
+
 ## Project structure
 
 ```
@@ -220,6 +295,13 @@ lib/
     explore.ts         # filter / sort logic for /explore
     favorites.ts       # toggleFavorite, getSavedListings, getFavoriteListingIds
     bestMatch.ts       # rules-based preference scoring (not AI)
+  messages/
+    queries.ts         # getConversationsForUser, getConversationDetails, getMessagesForConversation
+    actions.ts         # startConversationForListing, sendMessage
+  requests/
+    queries.ts         # incoming/outgoing lists, request details, checklist items
+    actions.ts         # create / accept / decline / cancel / toggleChecklistItem / complete
+    constants.ts       # 7 default checklist items, status labels + tones
   supabase/
     server.ts          # createSupabaseServerClient — Server Components / Route Handlers
     browser.ts         # getSupabaseBrowserClient — Client Components
@@ -240,5 +322,6 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 - **Milestone 2** ✓ auth, .edu / UCSD access control, onboarding, route protection.
 - **Milestone 3** ✓ listing creation, drafts/publish lifecycle, owner management, public detail page with private-address omission.
 - **Milestone 4** ✓ explore + filters + sort, rules-based best-match, favorites (save/unsave + /saved page).
+- **Milestone 5** ✓ messaging (conversation list + thread + composer), interest requests (create/accept/decline/cancel), sublet checklist, complete → listing filled.
 
-Messaging, interest requests, reports, and analytics land in later milestones.
+Reports, admin moderation, and analytics land in later milestones.

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FavoriteButton } from "@/components/listings/FavoriteButton";
+import { MessageButton } from "@/components/listings/MessageButton";
 import { PlaceholderActionButtons } from "@/components/listings/PlaceholderActionButtons";
+import { RequestButton } from "@/components/listings/RequestButton";
 import { requireOnboardedUser } from "@/lib/auth/session";
 import { isListingSaved } from "@/lib/listings/favorites";
 import {
@@ -68,12 +70,18 @@ export default async function ListingDetailPage({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap items-start gap-2">
         <FavoriteButton
           listingId={listing.id}
           initialSaved={saved}
           variant="pill"
         />
+        {!isOwner && listing.status === "published" ? (
+          <>
+            <MessageButton listingId={listing.id} />
+            <RequestButton listingId={listing.id} />
+          </>
+        ) : null}
         <PlaceholderActionButtons />
       </div>
 

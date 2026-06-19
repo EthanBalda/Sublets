@@ -2,14 +2,23 @@ import type { Metadata } from "next";
 import { requireOnboardedUser } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/actions";
 import { getOwnListings } from "@/lib/listings/queries";
+import {
+  getIncomingRequestsForLister,
+  getOutgoingRequestsForSeeker,
+} from "@/lib/requests/queries";
 import { MyListingsSection } from "@/components/listings/MyListingsSection";
+import { RequestsSection } from "@/components/requests/RequestsSection";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const session = await requireOnboardedUser();
   const { profile, email } = session;
-  const listings = await getOwnListings(profile.id);
+  const [listings, incoming, outgoing] = await Promise.all([
+    getOwnListings(profile.id),
+    getIncomingRequestsForLister(profile.id),
+    getOutgoingRequestsForSeeker(profile.id),
+  ]);
 
   return (
     <section className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
@@ -25,6 +34,24 @@ export default async function DashboardPage() {
 
       <div className="mt-8">
         <MyListingsSection listings={listings} />
+      </div>
+
+      <div className="mt-8">
+        <RequestsSection
+          title="Incoming requests"
+          emptyHint="No one has requested your listings yet."
+          requests={incoming}
+          side="lister"
+        />
+      </div>
+
+      <div className="mt-8">
+        <RequestsSection
+          title="Your requests"
+          emptyHint="You haven't requested any listings yet."
+          requests={outgoing}
+          side="seeker"
+        />
       </div>
 
       <details className="mt-10 rounded-2xl border border-[var(--border)] p-4">
