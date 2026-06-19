@@ -330,6 +330,63 @@ A typical run-through assuming two test users (A and B) and one admin user (coul
 | `/admin` user row | suspend / verification failure | inline error text (own-account suspension shows the specific message) |
 | `/admin` for non-admins | not is_admin | redirect to `/dashboard` (no UI hint) |
 
+## Analytics (Milestone 7)
+
+### Event tracking
+
+Every action that matters operationally writes a row into `public.analytics_events` via `lib/analytics/track.ts`. Tracking is **best-effort** — the helper wraps its insert in try/catch and never throws, so a Supabase blip can't break the parent flow. Events captured:
+
+| Event | Where it fires | Metadata |
+|---|---|---|
+| `signup_completed` | `emailPasswordAuth` after `signUp()` succeeds | `domain` |
+| `profile_completed` | `submitOnboarding` after profile upsert | `campus_id`, `role`, `heard_from` |
+| `listing_created` | `createListing` after insert | `listing_id`, `campus_id`, `mode` |
+| `listing_published` | `createListing` (publish path) / `updateListing` (draft→published) / `changeListingStatus` (re-publish) | `listing_id`, `source` |
+| `listing_viewed` | `/listings/[id]` server render — non-owner + published only | `listing_id`, `campus_id` |
+| `listing_saved` | `toggleFavorite` insert path | `listing_id` |
+| `listing_unsaved` | `toggleFavorite` delete path | `listing_id` |
+| `message_sent` | `sendMessage` after insert | `conversation_id` |
+| `interest_request_created` | `createInterestRequest` after insert | `interest_request_id`, `listing_id` |
+| `interest_request_accepted` | `acceptInterestRequest` after status flip | `interest_request_id` |
+| `interest_request_declined` | `declineInterestRequest` | `interest_request_id` |
+| `interest_request_cancelled` | `cancelInterestRequest` | `interest_request_id` |
+| `interest_request_completed` | `completeInterestRequest` | `interest_request_id`, `listing_id` |
+| `listing_marked_filled` | `changeListingStatus(filled)` + `completeInterestRequest` | `listing_id`, `source`, optional `interest_request_id` |
+| `report_submitted` | `createReport` after insert | `report_id`, `reason`, `target`, optional ids |
+
+Owner self-views are intentionally skipped so listers don't inflate their own view counts.
+
+### Admin analytics dashboard
+
+`/admin/analytics` — gated by `requireAdminUser` (admin + onboarded + not suspended). Linked from the main `/admin` page via the *Analytics →* pill in the header.
+
+Sections + metrics:
+
+- **Users** — Total users · Onboarded · Suspended
+- **Listings** — Published · Drafts · Paused · Filled · Removed · Expired, plus:
+  - **Fill rate** = filled ÷ (published + paused + filled + expired + removed), rendered as a percentage. `—` when the denominator is zero.
+  - **Avg time to fill** = mean of `filled_at − created_at` across `status='filled'` rows. Formatted as days / hours / minutes / seconds based on magnitude. `—` when no filled listings exist.
+- **Engagement** — Favorites · Conversations · Messages sent
+- **Interest requests** — Total · Pending · Accepted · Completed
+- **Moderation** — Total reports · Open · Scam / harassment (reports where `reason` is `scam_suspicion` or `harassment`)
+- **Acquisition source** — Small table of `profiles.heard_from` answers grouped + counted. Users who skipped the question land in the `unspecified` bucket. Empty state when no data.
+
+All counts are sourced from operational tables (not `analytics_events`), so existing seed data + any actions you've taken so far already populate the dashboard. The `analytics_events` table is forward-looking — useful for funnels and time-series we don't render yet.
+
+### Manual testing
+
+1. Sign in as an admin user. Visit `/admin/analytics` — every section renders, counts match what you'd expect from the seed data + your own activity.
+2. From an empty state: temporarily wipe favorites with `delete from public.favorites where user_id = '<your-profile-id>';` then refresh — Favorites should drop to 0.
+3. To test acquisition source: ensure two test profiles answered different *heard from* values during onboarding; the table at the bottom should list both rows.
+4. To exercise the fill-rate calculation: in `/dashboard`, mark one of your draft listings as *Published*, then *Mark filled*. Refresh `/admin/analytics`. Fill rate should change (numerator and denominator both move).
+5. To exercise scam/harassment count: as a non-admin user, file a report on any listing with reason *Harassment*. Refresh `/admin/analytics` — `Scam / harassment` should bump by 1.
+6. To verify gating: sign out, log in as a non-admin, navigate to `/admin/analytics` — `requireAdminUser` redirects you to `/dashboard`. No UI hint that the page exists.
+
+### Access control
+
+- Server-side: every page through `requireAdminUser` (which calls `requireOnboardedUser`, blocking suspended users too).
+- RLS: `analytics_events` has `analytics_admin_read` (`is_admin()`) and `analytics_self_insert` (`user_id IS NULL OR user_id = current_profile_id()`). Non-admins can't read events; the dashboard's count-table queries also require admin via the higher-level RLS on `profiles`/`listings`/`reports` (admin-all policies + permissive read on profiles).
+
 ## Project structure
 
 ```
@@ -376,6 +433,10 @@ lib/
   admin/
     queries.ts         # getReports / getAllListings / getAllProfiles (with filters)
     actions.ts         # updateReportStatus / updateReportNotes / removeListing / restoreListing / setUserSuspension / setIdVerificationStatus
+    constants.ts       # ID_VERIFICATION_OPTIONS (plain module — must not be in actions.ts)
+  analytics/
+    track.ts           # best-effort track(eventName, metadata) helper
+    queries.ts         # getAnalyticsMetrics() — all metrics for /admin/analytics
   supabase/
     server.ts          # createSupabaseServerClient — Server Components / Route Handlers
     browser.ts         # getSupabaseBrowserClient — Client Components
@@ -398,5 +459,6 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 - **Milestone 4** ✓ explore + filters + sort, rules-based best-match, favorites (save/unsave + /saved page).
 - **Milestone 5** ✓ messaging (conversation list + thread + composer), interest requests (create/accept/decline/cancel), sublet checklist, complete → listing filled.
 - **Milestone 6** ✓ user reports (listing/conversation/user), admin moderation dashboard, listing remove/restore, user suspend + manual id_verification_status.
+- **Milestone 7** ✓ best-effort event tracking across every operational flow, admin analytics dashboard at `/admin/analytics`.
 
-Analytics dashboard lands in a later milestone.
+Polish/deployment milestone lands next.

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { track } from "@/lib/analytics/track";
 
 export type SendMessageResult = { ok: true } | { ok: false; error: string };
 
@@ -122,6 +123,8 @@ export async function sendMessage(
     .from("conversations")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", convo.id);
+
+  await track("message_sent", { conversation_id: convo.id });
 
   revalidatePath(`/messages/${convo.id}`);
   revalidatePath("/messages");

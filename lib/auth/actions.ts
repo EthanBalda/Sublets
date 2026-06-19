@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { classifyEmail } from "@/lib/campus";
+import { track } from "@/lib/analytics/track";
 
 export type AuthFormState = {
   status: "idle" | "error";
@@ -54,6 +55,7 @@ export async function emailPasswordAuth(
     if (error) {
       return { status: "error", error: friendlySignUpError(error.message), mode };
     }
+    await track("signup_completed", { domain: email.split("@")[1] ?? null });
   } else {
     const { error } = await supabase.auth.signInWithPassword({
       email,

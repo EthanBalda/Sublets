@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { track } from "@/lib/analytics/track";
 import { DEFAULT_CHECKLIST_ITEMS } from "@/lib/requests/constants";
 
 export type CreateRequestState =
@@ -72,6 +73,10 @@ export async function createInterestRequest(
     };
   }
 
+  await track("interest_request_created", {
+    interest_request_id: created.id,
+    listing_id: listing.id,
+  });
   revalidatePath("/dashboard");
   redirect(`/requests/${created.id}`);
 }
@@ -123,6 +128,7 @@ export async function acceptInterestRequest(requestId: string): Promise<void> {
     if (insertError) throw insertError;
   }
 
+  await track("interest_request_accepted", { interest_request_id: requestId });
   revalidatePath(`/requests/${requestId}`);
   revalidatePath("/dashboard");
 }
@@ -147,6 +153,7 @@ export async function declineInterestRequest(requestId: string): Promise<void> {
     .update({ status: "declined" })
     .eq("id", requestId);
   if (error) throw error;
+  await track("interest_request_declined", { interest_request_id: requestId });
   revalidatePath(`/requests/${requestId}`);
   revalidatePath("/dashboard");
 }
@@ -171,6 +178,7 @@ export async function cancelInterestRequest(requestId: string): Promise<void> {
     .update({ status: "cancelled" })
     .eq("id", requestId);
   if (error) throw error;
+  await track("interest_request_cancelled", { interest_request_id: requestId });
   revalidatePath(`/requests/${requestId}`);
   revalidatePath("/dashboard");
 }
@@ -267,6 +275,16 @@ export async function completeInterestRequest(requestId: string): Promise<void> 
     .update({ status: "filled", filled_at: now })
     .eq("id", req.listing_id);
   if (listingError) throw listingError;
+
+  await track("interest_request_completed", {
+    interest_request_id: requestId,
+    listing_id: req.listing_id,
+  });
+  await track("listing_marked_filled", {
+    listing_id: req.listing_id,
+    interest_request_id: requestId,
+    source: "request_completed",
+  });
 
   revalidatePath(`/requests/${requestId}`);
   revalidatePath(`/listings/${req.listing_id}`);

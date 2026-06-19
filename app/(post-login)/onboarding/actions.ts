@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { SUPPORTED_CAMPUS_DOMAIN } from "@/lib/campus";
+import { track } from "@/lib/analytics/track";
 import type { ProfileRole } from "@/lib/supabase/types";
 
 export type OnboardingState = {
@@ -98,6 +99,12 @@ export async function submitOnboarding(
       error: `Couldn't save your profile: ${upsertError.message}`,
     };
   }
+
+  await track("profile_completed", {
+    campus_id: campus.id,
+    role,
+    heard_from: optional(formData.get("heard_from")),
+  });
 
   redirect("/explore");
 }

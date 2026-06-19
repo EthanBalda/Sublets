@@ -108,6 +108,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <a href="#users" className="rounded-full border border-[var(--border)] px-3 py-1 hover:bg-black/5">
             Users
           </a>
+          <Link
+            href="/admin/analytics"
+            className="rounded-full border border-[var(--border)] px-3 py-1 hover:bg-black/5"
+          >
+            Analytics →
+          </Link>
         </nav>
       </header>
 

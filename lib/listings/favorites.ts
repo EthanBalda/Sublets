@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { track } from "@/lib/analytics/track";
 import {
   PUBLIC_LISTING_COLUMNS,
   type PublicListing,
@@ -97,6 +98,7 @@ export async function toggleFavorite(listingId: string): Promise<boolean> {
       .delete()
       .eq("id", existing.id);
     if (error) throw error;
+    await track("listing_unsaved", { listing_id: listingId });
     revalidatePath("/explore");
     revalidatePath("/saved");
     revalidatePath(`/listings/${listingId}`);
@@ -113,6 +115,7 @@ export async function toggleFavorite(listingId: string): Promise<boolean> {
   if (error && !/duplicate key/i.test(error.message)) {
     throw error;
   }
+  await track("listing_saved", { listing_id: listingId });
   revalidatePath("/explore");
   revalidatePath("/saved");
   revalidatePath(`/listings/${listingId}`);

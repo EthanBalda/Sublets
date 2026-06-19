@@ -6,6 +6,7 @@ import { MessageButton } from "@/components/listings/MessageButton";
 import { RequestButton } from "@/components/listings/RequestButton";
 import { ReportButton } from "@/components/reports/ReportButton";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { track } from "@/lib/analytics/track";
 import { isListingSaved } from "@/lib/listings/favorites";
 import {
   getListerProfileCard,
@@ -39,6 +40,16 @@ export default async function ListingDetailPage({
   const photos = await getListingPhotos(listing.id);
   const lister = await getListerProfileCard(listing.owner_id);
   const saved = await isListingSaved(session.profile.id, listing.id);
+
+  // Best-effort view tracking. Skip self-views so owners don't inflate their
+  // own counts, and skip non-published rows (draft/paused/filled views are
+  // either owner-self or admin — neither is a marketplace signal).
+  if (!isOwner && listing.status === "published") {
+    await track("listing_viewed", {
+      listing_id: listing.id,
+      campus_id: listing.campus_id,
+    });
+  }
 
   return (
     <section className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { track } from "@/lib/analytics/track";
 import {
   REPORT_REASON_VALUES,
   type ReportReason,
@@ -94,22 +95,35 @@ export async function createReport(
     reportedUserId = target.userId;
   }
 
-  const { error } = await supabase.from("reports").insert({
-    reporter_id: session.profile.id,
-    reported_user_id: reportedUserId,
-    listing_id: listingId,
-    conversation_id: conversationId,
-    reason,
-    details: details.length > 0 ? details : null,
-    status: "open",
-  });
+  const { data: inserted, error } = await supabase
+    .from("reports")
+    .insert({
+      reporter_id: session.profile.id,
+      reported_user_id: reportedUserId,
+      listing_id: listingId,
+      conversation_id: conversationId,
+      reason,
+      details: details.length > 0 ? details : null,
+      status: "open",
+    })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !inserted) {
     return {
       status: "error",
       error: "Couldn't submit your report — try again in a moment.",
     };
   }
+
+  await track("report_submitted", {
+    report_id: inserted.id,
+    reason,
+    target: target.kind,
+    listing_id: listingId,
+    conversation_id: conversationId,
+    reported_user_id: reportedUserId,
+  });
 
   revalidatePath("/admin");
   return { status: "sent" };

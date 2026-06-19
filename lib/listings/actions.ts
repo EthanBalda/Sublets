@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOnboardedUser } from "@/lib/auth/session";
+import { track } from "@/lib/analytics/track";
 import type {
   ListingStatus,
   Tables,
@@ -267,6 +268,18 @@ export async function createListing(
   }
 
   await replacePhotos(data.id, values.photo_urls);
+  await track("listing_created", {
+    listing_id: data.id,
+    campus_id: campusId,
+    mode,
+  });
+  if (data.status === "published") {
+    await track("listing_published", {
+      listing_id: data.id,
+      campus_id: campusId,
+      source: "create",
+    });
+  }
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${data.id}`);
 
@@ -365,6 +378,12 @@ export async function updateListing(
   }
 
   await replacePhotos(listingId, values.photo_urls);
+  if (newStatus === "published") {
+    await track("listing_published", {
+      listing_id: listingId,
+      source: "edit",
+    });
+  }
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${listingId}`);
 
@@ -421,6 +440,19 @@ export async function changeListingStatus(
     .eq("id", listingId)
     .eq("owner_id", session.profile.id);
   if (error) throw error;
+
+  if (target === "published") {
+    await track("listing_published", {
+      listing_id: listingId,
+      source: "status_change",
+    });
+  } else if (target === "filled") {
+    await track("listing_marked_filled", {
+      listing_id: listingId,
+      source: "status_change",
+    });
+  }
+
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${listingId}`);
 }
