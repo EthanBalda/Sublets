@@ -56,7 +56,11 @@ async function count<T>(
   ) => T,
 ): Promise<number> {
   const supabase = await createSupabaseServerClient();
-  const res = (await builder(supabase)) as { count: number | null };
+  const res = (await builder(supabase)) as {
+    count: number | null;
+    error: unknown;
+  };
+  if (res.error) throw res.error;
   return res.count ?? 0;
 }
 

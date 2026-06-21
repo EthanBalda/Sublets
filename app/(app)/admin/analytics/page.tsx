@@ -12,18 +12,19 @@ export default async function AnalyticsPage() {
   await requireAdminUser();
 
   let metrics: AnalyticsMetrics | null = null;
+  const refreshedAt = new Date();
   try {
     metrics = await getAnalyticsMetrics();
   } catch {
     return (
-      <Shell>
+      <Shell refreshedAt={refreshedAt}>
         <ErrorPanel />
       </Shell>
     );
   }
 
   return (
-    <Shell>
+    <Shell refreshedAt={refreshedAt}>
       <Section title="Users">
         <MetricGrid>
           <Metric label="Total users" value={metrics.totalUsers} />
@@ -116,7 +117,13 @@ export default async function AnalyticsPage() {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({
+  children,
+  refreshedAt,
+}: {
+  children: React.ReactNode;
+  refreshedAt: Date;
+}) {
   return (
     <section className="mx-auto w-full max-w-4xl px-4 py-8 sm:py-12">
       <header>
@@ -135,7 +142,14 @@ function Shell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Operational health snapshot. Numbers update on each page load.
+          Refreshed{" "}
+          {refreshedAt.toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+          . Reload to update.
         </p>
       </header>
       <div className="mt-8 flex flex-col gap-10">{children}</div>
