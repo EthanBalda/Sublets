@@ -51,6 +51,9 @@ function SwipeCard({
     ],
   }));
 
+  // Reanimated shared values are intentionally mutable in gesture worklets —
+  // suppress React Compiler's immutability rule for this block only.
+  /* eslint-disable react-hooks/immutability */
   const pan = Gesture.Pan()
     .onUpdate((e) => {
       translateX.value = e.translationX;
@@ -78,6 +81,7 @@ function SwipeCard({
         translateY.value = withSpring(0);
       }
     });
+  /* eslint-enable react-hooks/immutability */
 
   return (
     <GestureDetector gesture={pan}>
@@ -117,9 +121,12 @@ export default function FeedScreen() {
   const [index, setIndex] = useState(0);
   const [fetching, setFetching] = useState(true);
 
+  // profile?.id as a primitive dep is intentional — avoids re-running on reference churn.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (profile) loadListings();
   }, [profile?.id]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function loadListings() {
     if (!profile) return;

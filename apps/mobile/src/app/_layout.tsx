@@ -22,7 +22,7 @@ function AuthGate() {
     } else {
       if (!inTabs) router.replace("/(tabs)");
     }
-  }, [loading, session, profile, segments]);
+  }, [loading, session, profile, segments, router]);
 
   if (loading) return null;
 
