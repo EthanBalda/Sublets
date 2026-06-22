@@ -8,6 +8,8 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web",
     "build:web": "npm run build --workspace=apps/web",
-    "test:e2e:web": "node apps/web/sublets-e2e.mjs"
+    "test:e2e:web": "node apps/web/sublets-e2e.mjs",
+    "dev:mobile": "npm run start --workspace=mobile",
+    "start:mobile": "npm run start --workspace=mobile"
   }
 }
