@@ -251,6 +251,17 @@ export function ListingForm({
         </p>
       ) : null}
 
+      <div className="flex flex-col gap-0.5 text-xs leading-5 text-[var(--muted)]">
+        <p>
+          Sublets currently verifies student email only. Government ID
+          verification is not active in this MVP.
+        </p>
+        <p>
+          Sublets helps organize the sublet process. It does not provide legal
+          advice, process payments, or replace landlord approval.
+        </p>
+      </div>
+
       <div className="flex flex-col gap-2 sm:flex-row">
         {isDraftOrNew ? (
           <>

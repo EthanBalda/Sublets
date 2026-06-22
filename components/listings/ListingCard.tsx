@@ -30,7 +30,7 @@ export function ListingCard({
         className="block focus:outline-none"
         aria-label={listing.title}
       >
-        <Thumbnail url={photo} />
+        <Thumbnail url={photo} title={listing.title} />
         <div className="flex flex-col gap-1 px-4 py-3">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-base font-semibold">
@@ -66,7 +66,7 @@ export function ListingCard({
   );
 }
 
-function Thumbnail({ url }: { url: string | null }) {
+function Thumbnail({ url, title }: { url: string | null; title: string }) {
   if (!url || url.startsWith("placeholder://") || !/^https?:\/\//.test(url)) {
     return (
       <div className="flex h-40 items-center justify-center bg-zinc-100 text-xs text-[var(--muted)]">
@@ -78,7 +78,7 @@ function Thumbnail({ url }: { url: string | null }) {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
-      alt=""
+      alt={title}
       loading="lazy"
       className="h-40 w-full object-cover"
     />

@@ -460,5 +460,8 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 - **Milestone 5** ✓ messaging (conversation list + thread + composer), interest requests (create/accept/decline/cancel), sublet checklist, complete → listing filled.
 - **Milestone 6** ✓ user reports (listing/conversation/user), admin moderation dashboard, listing remove/restore, user suspend + manual id_verification_status.
 - **Milestone 7** ✓ best-effort event tracking across every operational flow, admin analytics dashboard at `/admin/analytics`.
+- **Milestone 8** ✓ loading skeletons for all (app) routes, error boundaries, accessibility (alt text, semantic markup), privacy copy on listing form, TESTING.md manual QA guide.
 
-Polish/deployment milestone lands next.
+## Manual QA
+
+See **[TESTING.md](./TESTING.md)** for step-by-step manual test flows covering auth, listings, explore, messaging, requests, reports, admin moderation, analytics, and deployment checks.
