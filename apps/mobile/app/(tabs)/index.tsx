@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   StyleSheet,
@@ -10,11 +11,13 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import type { SharedValue } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -29,16 +32,19 @@ type ListingWithPhotos = Tables<"listings"> & {
 
 function SwipeCard({
   listing,
+  translateX,
+  translateY,
+  disabled,
   onPass,
   onRequest,
 }: {
   listing: ListingWithPhotos;
+  translateX: SharedValue<number>;
+  translateY: SharedValue<number>;
+  disabled: boolean;
   onPass: () => void;
   onRequest: () => void;
 }) {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-
   const photo = listing.listing_photos
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)[0];
@@ -52,15 +58,16 @@ function SwipeCard({
   }));
 
   const pan = Gesture.Pan()
+    .enabled(!disabled)
     .onUpdate((e) => {
       translateX.value = e.translationX;
       translateY.value = e.translationY * 0.3;
     })
     .onEnd((e) => {
       if (e.translationX > SWIPE_THRESHOLD) {
-        // Animate off screen and immediately advance — do NOT wait for the
-        // animation callback, which can fire with done=false in Expo Go and
-        // leave the card stuck at its current position.
+        // Start immediate visual response on UI thread. handleRequest will
+        // also call withSpring when it runs on the JS thread — reinforcing
+        // this animation is harmless and handles the button-tap path too.
         translateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
         runOnJS(onRequest)();
       } else if (e.translationX < -SWIPE_THRESHOLD) {
@@ -109,8 +116,17 @@ export default function FeedScreen() {
   const [listings, setListings] = useState<ListingWithPhotos[]>([]);
   const [index, setIndex] = useState(0);
   const [fetching, setFetching] = useState(true);
+  const [requesting, setRequesting] = useState(false);
+
+  // Shared animation values live in the parent so handleRequest can
+  // snap the card back on insert failure without losing the animation state.
+  const cardTranslateX = useSharedValue(0);
+  const cardTranslateY = useSharedValue(0);
+
   // Guard against requesting the same listing twice if swipe + button fire together.
   const lastRequestedId = useRef<string | null>(null);
+
+  const currentListing = listings[index];
 
   // profile?.id as a primitive dep is intentional — avoids re-running on reference churn.
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -142,38 +158,73 @@ export default function FeedScreen() {
     const excluded = new Set(
       (requestsRes.data ?? []).map((r) => r.listing_id)
     );
-    const filtered = ((listingsRes.data ?? []) as unknown as ListingWithPhotos[]).filter(
-      (l) => !excluded.has(l.id)
-    );
+    const filtered = (
+      (listingsRes.data ?? []) as unknown as ListingWithPhotos[]
+    ).filter((l) => !excluded.has(l.id));
 
     setListings(filtered);
     setIndex(0);
     lastRequestedId.current = null;
+    cardTranslateX.value = 0;
+    cardTranslateY.value = 0;
     setFetching(false);
   }
 
-  function handleRequest() {
-    if (!profile) return;
+  async function handleRequest() {
+    if (!profile || requesting) return;
     const listing = listings[index];
     if (!listing) return;
+    // Guard: prevent a swipe + button tap from firing two inserts for the same card.
     if (lastRequestedId.current === listing.id) return;
 
     lastRequestedId.current = listing.id;
-    setIndex((i) => i + 1);
+    setRequesting(true);
 
-    supabase.from("interest_requests").insert({
+    // Animate card off screen to the right. For swipe, the gesture already
+    // started this spring; calling it again just reinforces the target.
+    // For button tap, this is the only animation trigger.
+    cardTranslateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
+
+    const { error } = await supabase.from("interest_requests").insert({
       listing_id: listing.id,
       seeker_id: profile.id,
       lister_id: listing.owner_id,
       status: "pending",
     });
+
+    if (!error || error.code === "23505") {
+      // Success, or duplicate (seeker already has a request for this listing).
+      // Reset animation values before advancing so the new card renders at 0.
+      cardTranslateX.value = 0;
+      cardTranslateY.value = 0;
+      setIndex((i) => i + 1);
+    } else {
+      // Insert failed — snap card back and surface the error.
+      lastRequestedId.current = null; // allow retry
+      cancelAnimation(cardTranslateX);
+      cancelAnimation(cardTranslateY);
+      cardTranslateX.value = withSpring(0, { damping: 20 });
+      cardTranslateY.value = withSpring(0, { damping: 20 });
+      const detail = [
+        error.message,
+        error.details ? `Details: ${error.details}` : null,
+        error.hint ? `Hint: ${error.hint}` : null,
+        `Code: ${error.code}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      Alert.alert("Couldn't send request", detail);
+    }
+
+    setRequesting(false);
   }
 
   function handlePass() {
+    if (requesting) return;
+    cardTranslateX.value = 0;
+    cardTranslateY.value = 0;
     setIndex((i) => i + 1);
   }
-
-  const currentListing = listings[index];
 
   if (fetching) {
     return (
@@ -199,8 +250,11 @@ export default function FeedScreen() {
           <SwipeCard
             key={currentListing.id}
             listing={currentListing}
+            translateX={cardTranslateX}
+            translateY={cardTranslateY}
+            disabled={requesting}
             onPass={handlePass}
-            onRequest={handleRequest}
+            onRequest={() => void handleRequest()}
           />
         ) : (
           <View style={styles.empty}>
@@ -208,7 +262,7 @@ export default function FeedScreen() {
             <Text style={styles.emptyText}>
               No more listings right now. Check back later.
             </Text>
-            <Pressable style={styles.refreshBtn} onPress={loadListings}>
+            <Pressable style={styles.refreshBtn} onPress={() => void loadListings()}>
               <Text style={styles.refreshBtnText}>Refresh</Text>
             </Pressable>
           </View>
@@ -217,11 +271,21 @@ export default function FeedScreen() {
 
       {currentListing && (
         <View style={styles.actions}>
-          <Pressable style={styles.passBtn} onPress={handlePass}>
+          <Pressable
+            style={[styles.passBtn, requesting && styles.btnDisabled]}
+            onPress={handlePass}
+            disabled={requesting}
+          >
             <Text style={styles.passBtnText}>Pass</Text>
           </Pressable>
-          <Pressable style={styles.requestBtn} onPress={handleRequest}>
-            <Text style={styles.requestBtnText}>Request</Text>
+          <Pressable
+            style={[styles.requestBtn, requesting && styles.btnDisabled]}
+            onPress={() => void handleRequest()}
+            disabled={requesting}
+          >
+            <Text style={styles.requestBtnText}>
+              {requesting ? "Requesting…" : "Request"}
+            </Text>
           </Pressable>
         </View>
       )}
@@ -294,6 +358,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   requestBtnText: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  btnDisabled: { opacity: 0.5 },
   empty: { alignItems: "center", gap: 12, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
   emptyText: { fontSize: 15, color: "#666", textAlign: "center" },
