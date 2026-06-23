@@ -1,6 +1,7 @@
 {
   "name": "sublets-monorepo",
   "private": true,
+  "main": "expo-router/entry",
   "workspaces": [
     "apps/*",
     "packages/*"
