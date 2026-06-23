@@ -5,7 +5,7 @@
 // and the entry point is read from this package.json's "main" field.
 //
 // getDefaultConfig(projectRoot) tells Expo Router where the app lives so it
-// discovers routes in apps/mobile/src/app/ correctly.
+// discovers routes in apps/mobile/app/ correctly.
 
 const { getDefaultConfig } = require("expo/metro-config");
 const path = require("path");
@@ -23,5 +23,30 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
 ];
+
+// Resolve the @/ alias used in route files.
+// babel-plugin-module-resolver cannot be installed due to a pre-existing
+// npm Invalid Version bug in the dependency tree, so we handle this here.
+// @/assets/* -> projectRoot/assets/*   (matches tsconfig @/assets/* path)
+// @/*        -> projectRoot/src/*      (matches tsconfig @/* path)
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName.startsWith("@/assets/")) {
+    const subPath = moduleName.slice("@/assets/".length);
+    return context.resolveRequest(
+      context,
+      path.resolve(projectRoot, "assets", subPath),
+      platform
+    );
+  }
+  if (moduleName.startsWith("@/")) {
+    const subPath = moduleName.slice(2);
+    return context.resolveRequest(
+      context,
+      path.resolve(projectRoot, "src", subPath),
+      platform
+    );
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 module.exports = config;
