@@ -51,9 +51,6 @@ function SwipeCard({
     ],
   }));
 
-  // Reanimated shared values are intentionally mutable in gesture worklets —
-  // suppress React Compiler's immutability rule for this block only.
-  /* eslint-disable react-hooks/immutability */
   const pan = Gesture.Pan()
     .onUpdate((e) => {
       translateX.value = e.translationX;
@@ -81,7 +78,6 @@ function SwipeCard({
         translateY.value = withSpring(0);
       }
     });
-  /* eslint-enable react-hooks/immutability */
 
   return (
     <GestureDetector gesture={pan}>
