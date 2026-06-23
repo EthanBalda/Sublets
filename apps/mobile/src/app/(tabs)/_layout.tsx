@@ -1,5 +1,10 @@
-import { Stack } from "expo-router";
+import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" options={{ title: "Feed" }} />
+      <Tabs.Screen name="requests" options={{ title: "Requests" }} />
+    </Tabs>
+  );
 }
