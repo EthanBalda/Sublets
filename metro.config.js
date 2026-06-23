@@ -8,10 +8,16 @@
 // discovers routes in apps/mobile/app/ correctly.
 
 const { getDefaultConfig } = require("expo/metro-config");
+const { loadProjectEnv } = require("@expo/env");
 const path = require("path");
 
 const workspaceRoot = __dirname;
 const projectRoot = path.resolve(workspaceRoot, "apps/mobile");
+
+// Expo in monorepo mode sets the Metro root to the workspace root, so it
+// loads .env from here instead of apps/mobile/. Explicitly load the mobile
+// project's .env so EXPO_PUBLIC_* vars are available during bundling.
+loadProjectEnv(projectRoot);
 
 const config = getDefaultConfig(projectRoot);
 
