@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -30,11 +30,11 @@ type ListingWithPhotos = Tables<"listings"> & {
 function SwipeCard({
   listing,
   onPass,
-  onLike,
+  onRequest,
 }: {
   listing: ListingWithPhotos;
   onPass: () => void;
-  onLike: () => void;
+  onRequest: () => void;
 }) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -58,21 +58,14 @@ function SwipeCard({
     })
     .onEnd((e) => {
       if (e.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(
-          SCREEN_WIDTH * 1.5,
-          { damping: 15 },
-          (done) => {
-            if (done) runOnJS(onLike)();
-          }
-        );
+        // Animate off screen and immediately advance — do NOT wait for the
+        // animation callback, which can fire with done=false in Expo Go and
+        // leave the card stuck at its current position.
+        translateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
+        runOnJS(onRequest)();
       } else if (e.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(
-          -SCREEN_WIDTH * 1.5,
-          { damping: 15 },
-          (done) => {
-            if (done) runOnJS(onPass)();
-          }
-        );
+        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 });
+        runOnJS(onPass)();
       } else {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
@@ -116,6 +109,8 @@ export default function FeedScreen() {
   const [listings, setListings] = useState<ListingWithPhotos[]>([]);
   const [index, setIndex] = useState(0);
   const [fetching, setFetching] = useState(true);
+  // Guard against requesting the same listing twice if swipe + button fire together.
+  const lastRequestedId = useRef<string | null>(null);
 
   // profile?.id as a primitive dep is intentional — avoids re-running on reference churn.
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -153,14 +148,17 @@ export default function FeedScreen() {
 
     setListings(filtered);
     setIndex(0);
+    lastRequestedId.current = null;
     setFetching(false);
   }
 
-  function handleLike() {
+  function handleRequest() {
     if (!profile) return;
     const listing = listings[index];
     if (!listing) return;
+    if (lastRequestedId.current === listing.id) return;
 
+    lastRequestedId.current = listing.id;
     setIndex((i) => i + 1);
 
     supabase.from("interest_requests").insert({
@@ -202,7 +200,7 @@ export default function FeedScreen() {
             key={currentListing.id}
             listing={currentListing}
             onPass={handlePass}
-            onLike={handleLike}
+            onRequest={handleRequest}
           />
         ) : (
           <View style={styles.empty}>
@@ -222,8 +220,8 @@ export default function FeedScreen() {
           <Pressable style={styles.passBtn} onPress={handlePass}>
             <Text style={styles.passBtnText}>Pass</Text>
           </Pressable>
-          <Pressable style={styles.likeBtn} onPress={handleLike}>
-            <Text style={styles.likeBtnText}>Like</Text>
+          <Pressable style={styles.requestBtn} onPress={handleRequest}>
+            <Text style={styles.requestBtnText}>Request</Text>
           </Pressable>
         </View>
       )}
@@ -288,14 +286,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   passBtnText: { fontSize: 16, fontWeight: "600", color: "#555" },
-  likeBtn: {
+  requestBtn: {
     flex: 1,
     backgroundColor: "#208AEF",
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
   },
-  likeBtnText: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  requestBtnText: { fontSize: 16, fontWeight: "600", color: "#fff" },
   empty: { alignItems: "center", gap: 12, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
   emptyText: { fontSize: 15, color: "#666", textAlign: "center" },

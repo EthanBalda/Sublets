@@ -13,16 +13,13 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import type { InterestRequestStatus } from "@sublets/shared/types";
 
-type IncomingRequest = {
+type OutgoingRequest = {
   id: string;
   status: InterestRequestStatus;
-  message: string | null;
   created_at: string;
-  seeker_id: string;
   listing_id: string;
   listing_title: string | null;
   monthly_rent: number | null;
-  seeker_name: string | null;
 };
 
 const STATUS_LABEL: Record<InterestRequestStatus, string> = {
@@ -49,11 +46,11 @@ const STATUS_BG: Record<InterestRequestStatus, string> = {
   completed: "#dbeafe",
 };
 
-export default function RequestsScreen() {
+export default function MyRequestsScreen() {
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [requests, setRequests] = useState<IncomingRequest[]>([]);
+  const [requests, setRequests] = useState<OutgoingRequest[]>([]);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,15 +61,16 @@ export default function RequestsScreen() {
 
     const { data: reqs, error: reqErr } = await supabase
       .from("interest_requests")
-      .select("id, status, message, created_at, seeker_id, listing_id")
-      .eq("lister_id", profile.id)
+      .select("id, status, created_at, listing_id")
+      .eq("seeker_id", profile.id)
       .order("created_at", { ascending: false });
 
     if (reqErr) {
-      setError("Couldn't load requests.");
+      setError("Couldn't load your requests.");
       setFetching(false);
       return;
     }
+
     if (!reqs || reqs.length === 0) {
       setRequests([]);
       setFetching(false);
@@ -80,37 +78,21 @@ export default function RequestsScreen() {
     }
 
     const listingIds = [...new Set(reqs.map((r) => r.listing_id))];
-    const seekerIds = [...new Set(reqs.map((r) => r.seeker_id))];
+    const { data: listings } = await supabase
+      .from("listings")
+      .select("id, title, monthly_rent")
+      .in("id", listingIds);
 
-    const [{ data: listings }, { data: seekers }] = await Promise.all([
-      supabase
-        .from("listings")
-        .select("id, title, monthly_rent")
-        .in("id", listingIds),
-      supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", seekerIds),
-    ]);
-
-    const listingById = new Map(
-      (listings ?? []).map((l) => [l.id, l])
-    );
-    const seekerById = new Map(
-      (seekers ?? []).map((p) => [p.id, p])
-    );
+    const listingById = new Map((listings ?? []).map((l) => [l.id, l]));
 
     setRequests(
       reqs.map((r) => ({
         id: r.id,
         status: r.status as InterestRequestStatus,
-        message: r.message,
         created_at: r.created_at,
-        seeker_id: r.seeker_id,
         listing_id: r.listing_id,
         listing_title: listingById.get(r.listing_id)?.title ?? null,
         monthly_rent: listingById.get(r.listing_id)?.monthly_rent ?? null,
-        seeker_name: seekerById.get(r.seeker_id)?.full_name ?? null,
       }))
     );
     setFetching(false);
@@ -129,8 +111,11 @@ export default function RequestsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Incoming Requests</Text>
-        <Text style={styles.headerSub}>Requests from students interested in your listings</Text>
+        <Pressable onPress={() => router.back()} style={styles.backRow}>
+          <Text style={styles.backLabel}>← Account</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>My Sent Requests</Text>
+        <Text style={styles.headerSub}>Listings you have requested</Text>
       </View>
 
       {error ? (
@@ -142,9 +127,9 @@ export default function RequestsScreen() {
         </View>
       ) : requests.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No incoming requests yet</Text>
+          <Text style={styles.emptyTitle}>No requests yet</Text>
           <Text style={styles.emptyText}>
-            Requests from students interested in your listings will show up here.
+            Swipe right on listings in the feed to send a request.
           </Text>
         </View>
       ) : (
@@ -153,51 +138,24 @@ export default function RequestsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() => router.push(`/request/${item.id}`)}
-            >
+            <View style={styles.card}>
               <View style={styles.cardTop}>
                 <Text style={styles.listingTitle} numberOfLines={1}>
                   {item.listing_title ?? "Listing"}
                 </Text>
-                <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: STATUS_BG[item.status] },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      { color: STATUS_COLOR[item.status] },
-                    ]}
-                  >
+                <View style={[styles.badge, { backgroundColor: STATUS_BG[item.status] }]}>
+                  <Text style={[styles.badgeText, { color: STATUS_COLOR[item.status] }]}>
                     {STATUS_LABEL[item.status]}
                   </Text>
                 </View>
               </View>
-
               {item.monthly_rent != null && (
-                <Text style={styles.rentText}>
-                  ${item.monthly_rent}/mo
-                </Text>
+                <Text style={styles.rentText}>${item.monthly_rent}/mo</Text>
               )}
-
-              <Text style={styles.seekerName}>
-                From: {item.seeker_name ?? "Unknown"}
-              </Text>
-
-              {item.message ? (
-                <Text style={styles.messagePreview} numberOfLines={2}>
-                  {`"${item.message}"`}
-                </Text>
-              ) : null}
-
               <Text style={styles.dateText}>
                 {new Date(item.created_at).toLocaleDateString()}
               </Text>
-            </Pressable>
+            </View>
           )}
         />
       )}
@@ -216,13 +174,17 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     backgroundColor: "#fff",
+    gap: 4,
   },
+  backRow: { marginBottom: 4 },
+  backLabel: { fontSize: 15, color: "#208AEF", fontWeight: "500" },
   headerTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
-  headerSub: { fontSize: 13, color: "#888", marginTop: 2 },
+  headerSub: { fontSize: 13, color: "#888" },
   list: { padding: 16, gap: 12 },
   card: {
     backgroundColor: "#fff",
@@ -247,15 +209,9 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
     marginRight: 8,
   },
-  badge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
+  badge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 12, fontWeight: "600" },
   rentText: { fontSize: 14, color: "#444" },
-  seekerName: { fontSize: 14, color: "#555" },
-  messagePreview: { fontSize: 13, color: "#777", fontStyle: "italic" },
   dateText: { fontSize: 12, color: "#aaa" },
   emptyTitle: { fontSize: 20, fontWeight: "700", color: "#1a1a1a" },
   emptyText: { fontSize: 14, color: "#666", textAlign: "center" },

@@ -13,14 +13,15 @@ function AuthGate() {
 
     const inAuth = segments[0] === "(auth)";
     const inOnboarding = segments[0] === "(onboarding)";
-    const inTabs = segments[0] === "(tabs)";
 
     if (!session) {
       if (!inAuth) router.replace("/(auth)/login");
     } else if (!profile?.is_onboarded) {
       if (!inOnboarding) router.replace("/(onboarding)");
     } else {
-      if (!inTabs) router.replace("/(tabs)");
+      // Only redirect away from auth/onboarding — allow any other authenticated route
+      // (e.g. /request/[id], /my-requests) without forcing back to tabs.
+      if (inAuth || inOnboarding) router.replace("/(tabs)");
     }
   }, [loading, session, profile, segments, router]);
 
