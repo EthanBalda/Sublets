@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "devDependencies": {
-    "expo-router": "~55.0.16"
+    "expo-router": "~6.0.23"
   },
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web",
