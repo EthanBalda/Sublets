@@ -250,6 +250,7 @@ export default function ListingFormFields({
   }
 
   function openDatePicker(field: "start" | "end") {
+    console.log("[DatePicker] opening for field:", field, "current showDatePicker:", showDatePicker);
     const existing = field === "start"
       ? values.available_start_date
       : values.available_end_date;
@@ -328,6 +329,23 @@ export default function ListingFormFields({
             ))}
           </View>
         )}
+
+        {/* DEBUG BOX — remove after M5.5 diagnosis */}
+        <View style={s.debugBox}>
+          <Text style={s.debugTxt}>
+            M5.5 · platform={Platform.OS} · picker={showDatePicker ? "OPEN" : "closed"}
+          </Text>
+          <Text style={s.debugTxt}>
+            photos={photos.length} local={photos.filter((u) => !u.startsWith("https")).length}
+          </Text>
+          {photos.length > 0 && (
+            <Text style={s.debugTxt} numberOfLines={1}>
+              uri0: {photos[0].slice(0, 60)}
+            </Text>
+          )}
+          <Text style={s.debugTxt}>start: {values.available_start_date || "(none)"}</Text>
+          <Text style={s.debugTxt}>end: {values.available_end_date || "(none)"}</Text>
+        </View>
 
         {onPhotosChange !== undefined && (
           <Section title="Photos">
@@ -691,6 +709,14 @@ const s = StyleSheet.create({
   btnPublishText: { fontSize: 15, fontWeight: "700", color: "#fff" },
   btnDisabled: { opacity: 0.5 },
   bottomPad: { height: 24 },
+  debugBox: {
+    backgroundColor: "#1a1a2e",
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 12,
+    gap: 2,
+  },
+  debugTxt: { color: "#00ff88", fontSize: 11, fontFamily: "monospace" },
   photoHint: { fontSize: 13, color: "#888", marginBottom: 10 },
   photoGrid: {
     flexDirection: "row",

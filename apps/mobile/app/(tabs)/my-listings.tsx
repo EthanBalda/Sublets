@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -51,6 +52,19 @@ function ListingCard({
           </View>
         )}
         <View style={styles.cardContent}>
+          {/* DEBUG — cover URL + open button */}
+          {cover ? (
+            <View style={styles.debugUrlBox}>
+              <Text style={styles.debugUrl} selectable numberOfLines={2}>
+                {cover.storage_url}
+              </Text>
+              <Pressable onPress={() => void Linking.openURL(cover.storage_url)}>
+                <Text style={styles.openBtn}>Open in browser</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={styles.debugUrl}>no cover URL</Text>
+          )}
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle} numberOfLines={2}>
               {listing.title}
@@ -243,4 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   editBtnText: { color: "#208AEF", fontWeight: "600", fontSize: 12 },
+  debugUrlBox: { marginBottom: 4 },
+  debugUrl: { fontSize: 10, color: "#888", flexShrink: 1 },
+  openBtn: { fontSize: 11, color: "#208AEF", fontWeight: "600", marginTop: 2 },
 });

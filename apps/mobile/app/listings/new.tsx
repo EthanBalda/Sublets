@@ -83,6 +83,13 @@ export default function NewListingScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
+      {/* DEBUG BANNER — visible proof M5.5 code is running */}
+      <View style={styles.debugBanner}>
+        <Text style={styles.debugBannerText}>
+          ⚡ M5.5 active · photos: {photos.length}
+        </Text>
+      </View>
+
       <ListingFormFields
         values={values}
         onChange={patch}
@@ -112,4 +119,10 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, minWidth: 60 },
   backText: { fontSize: 15, color: "#208AEF", fontWeight: "600" },
   headerSpacer: { minWidth: 60 },
+  debugBanner: {
+    backgroundColor: "#ff3b30",
+    paddingVertical: 5,
+    alignItems: "center",
+  },
+  debugBannerText: { color: "#fff", fontSize: 12, fontWeight: "700" },
 });

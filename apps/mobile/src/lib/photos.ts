@@ -46,14 +46,28 @@ async function uploadPhoto(localUri: string, path: string): Promise<string> {
   }
   console.log(`[photos] read ${arrayBuffer.byteLength} bytes`);
 
-  const { error } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
+  const { data: uploadData, error } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
     contentType,
     upsert: true,
   });
+  console.log(`[photos] upload result: data=${JSON.stringify(uploadData)} error=${error?.message ?? "none"}`);
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
   const url = getPublicUrl(path);
   console.log(`[photos] public URL: ${url}`);
+
+  // Immediately verify the object is readable at the public URL.
+  try {
+    const v = await fetch(url);
+    console.log(
+      `[photos] verify fetch: status=${v.status}`,
+      `type=${v.headers.get("content-type")}`,
+      `len=${v.headers.get("content-length")}`
+    );
+  } catch (verifyErr) {
+    console.warn("[photos] verify fetch threw:", verifyErr);
+  }
+
   return url;
 }
 
