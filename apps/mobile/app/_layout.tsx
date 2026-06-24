@@ -20,17 +20,27 @@ function AuthGate() {
     const inAuth = segments[0] === "(auth)";
     const inOnboarding = segments[0] === "(onboarding)";
 
+    console.log(
+      "[AuthGate] segments:", JSON.stringify(segments),
+      "session:", !!session,
+      "onboarded:", !!profile?.is_onboarded
+    );
+
     if (!session) {
-      console.log("[AuthGate] no session → login");
-      if (!inAuth) router.replace("/(auth)/login");
+      if (!inAuth) {
+        console.log("[AuthGate] → /(auth)/login");
+        router.replace("/(auth)/login");
+      }
     } else if (!profile?.is_onboarded) {
-      console.log("[AuthGate] session but not onboarded → onboarding");
-      if (!inOnboarding) router.replace("/(onboarding)");
+      if (!inOnboarding) {
+        console.log("[AuthGate] → /(onboarding)");
+        router.replace("/(onboarding)");
+      }
     } else {
-      // Only redirect away from auth/onboarding — allow any other authenticated route
-      // (e.g. /request/[id], /my-requests) without forcing back to tabs.
+      // Authenticated + onboarded: leave tabs/stack routes alone.
+      // app/index.tsx issues a <Redirect href="/(tabs)" /> which covers root "/".
       if (inAuth || inOnboarding) {
-        console.log("[AuthGate] authenticated + onboarded → tabs");
+        console.log("[AuthGate] → /(tabs)");
         router.replace("/(tabs)");
       }
     }
@@ -40,7 +50,7 @@ function AuthGate() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#208AEF" />
-        <Text style={styles.loadingText}>Loading…</Text>
+        <Text style={styles.loadingText}>Loading Sublets…</Text>
       </View>
     );
   }
@@ -49,6 +59,7 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  console.log("[RootLayout] render");
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
