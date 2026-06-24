@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { insertListing } from "@/lib/listings";
+import { resolvePhotos, replaceListingPhotos } from "@/lib/photos";
 import ListingFormFields, {
   defaultFormValues,
   validateForDraft,
@@ -13,10 +14,11 @@ import ListingFormFields, {
 import type { TablesInsert } from "@sublets/shared/types";
 
 export default function NewListingScreen() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [values, setValues] = useState<FormValues>(defaultFormValues);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,7 +27,7 @@ export default function NewListingScreen() {
   }
 
   async function submit(publish: boolean) {
-    if (!profile) return;
+    if (!profile || !session) return;
     const errs = publish ? validateForPublish(values) : validateForDraft(values);
     if (errs.length > 0) {
       setErrors(errs);
@@ -58,7 +60,11 @@ export default function NewListingScreen() {
         pets_allowed: values.pets_allowed,
         status: publish ? "published" : "draft",
       };
-      await insertListing(insert);
+      const listing = await insertListing(insert);
+      if (photos.length > 0) {
+        const urls = await resolvePhotos(photos, listing.id, session.user.id);
+        await replaceListingPhotos(listing.id, urls);
+      }
       router.replace("/(tabs)/my-listings");
     } catch (e: unknown) {
       Alert.alert("Error", e instanceof Error ? e.message : String(e));
@@ -84,6 +90,8 @@ export default function NewListingScreen() {
         submitting={submitting}
         onSaveDraft={() => void submit(false)}
         onPublish={() => void submit(true)}
+        photos={photos}
+        onPhotosChange={setPhotos}
       />
     </View>
   );

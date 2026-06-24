@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContext";
 import { getListingById, saveListing, type Listing } from "@/lib/listings";
+import { resolvePhotos, replaceListingPhotos, getListingPhotos } from "@/lib/photos";
 import ListingFormFields, {
   defaultFormValues,
   validateForDraft,
@@ -35,22 +37,25 @@ function listingToForm(l: Listing): FormValues {
 
 export default function EditListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { session } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [values, setValues] = useState<FormValues>(defaultFormValues);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    getListingById(id)
-      .then((l) => {
+    Promise.all([getListingById(id), getListingPhotos(id)])
+      .then(([l, photoUrls]) => {
         if (l) {
           setListing(l);
           setValues(listingToForm(l));
         }
+        setPhotos(photoUrls);
       })
       .catch((e: unknown) =>
         Alert.alert("Error", e instanceof Error ? e.message : String(e))
@@ -63,7 +68,7 @@ export default function EditListingScreen() {
   }
 
   async function submit(publish: boolean) {
-    if (!id) return;
+    if (!id || !session) return;
     const errs = publish ? validateForPublish(values) : validateForDraft(values);
     if (errs.length > 0) {
       setErrors(errs);
@@ -95,6 +100,8 @@ export default function EditListingScreen() {
         status: publish ? "published" : "draft",
       };
       await saveListing(id, update);
+      const urls = await resolvePhotos(photos, id, session.user.id);
+      await replaceListingPhotos(id, urls);
       router.replace("/(tabs)/my-listings");
     } catch (e: unknown) {
       Alert.alert("Error", e instanceof Error ? e.message : String(e));
@@ -136,6 +143,8 @@ export default function EditListingScreen() {
         submitting={submitting}
         onSaveDraft={() => void submit(false)}
         onPublish={() => void submit(true)}
+        photos={photos}
+        onPhotosChange={setPhotos}
       />
     </View>
   );

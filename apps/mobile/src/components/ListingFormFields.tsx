@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +11,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { HOUSING_TYPES, UTILITIES_INCLUDED, LEASE_STATUSES } from "@sublets/shared/constants";
 
 export interface FormValues {
@@ -186,6 +189,8 @@ function ToggleRow({
   );
 }
 
+const MAX_PHOTOS = 6;
+
 interface ListingFormFieldsProps {
   values: FormValues;
   onChange: (patch: Partial<FormValues>) => void;
@@ -193,6 +198,8 @@ interface ListingFormFieldsProps {
   submitting: boolean;
   onSaveDraft: () => void;
   onPublish: () => void;
+  photos?: string[];
+  onPhotosChange?: (photos: string[]) => void;
 }
 
 export default function ListingFormFields({
@@ -202,9 +209,34 @@ export default function ListingFormFields({
   submitting,
   onSaveDraft,
   onPublish,
+  photos = [],
+  onPhotosChange,
 }: ListingFormFieldsProps) {
   function set<K extends keyof FormValues>(key: K, val: FormValues[K]) {
     onChange({ [key]: val } as Partial<FormValues>);
+  }
+
+  async function pickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission required",
+        "Allow Sublets to access your photos in Settings."
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      allowsMultipleSelection: false,
+    });
+    if (!result.canceled && result.assets[0]) {
+      onPhotosChange?.([...photos, result.assets[0].uri]);
+    }
+  }
+
+  function removePhoto(index: number) {
+    onPhotosChange?.(photos.filter((_, i) => i !== index));
   }
 
   return (
@@ -225,6 +257,36 @@ export default function ListingFormFields({
               </Text>
             ))}
           </View>
+        )}
+
+        {onPhotosChange !== undefined && (
+          <Section title="Photos">
+            <Text style={s.photoHint}>
+              Up to {MAX_PHOTOS} photos. First photo is the cover.
+            </Text>
+            <View style={s.photoGrid}>
+              {photos.map((uri, i) => (
+                <View key={`${i}-${uri.slice(-8)}`} style={s.photoThumb}>
+                  <Image source={{ uri }} style={s.thumbImg} contentFit="cover" />
+                  <Pressable
+                    style={s.thumbRemove}
+                    onPress={() => removePhoto(i)}
+                  >
+                    <Text style={s.thumbRemoveText}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {photos.length < MAX_PHOTOS && (
+                <Pressable
+                  style={s.addPhotoBtn}
+                  onPress={() => void pickPhoto()}
+                  disabled={submitting}
+                >
+                  <Text style={s.addPhotoBtnText}>+{"\n"}Add</Text>
+                </Pressable>
+              )}
+            </View>
+          </Section>
         )}
 
         <Section title="Basics">
@@ -496,4 +558,48 @@ const s = StyleSheet.create({
   btnPublishText: { fontSize: 15, fontWeight: "700", color: "#fff" },
   btnDisabled: { opacity: 0.5 },
   bottomPad: { height: 24 },
+  photoHint: { fontSize: 13, color: "#888", marginBottom: 10 },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  photoThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: "hidden",
+    position: "relative",
+  },
+  thumbImg: { width: 80, height: 80 },
+  thumbRemove: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbRemoveText: { color: "#fff", fontSize: 16, lineHeight: 20 },
+  addPhotoBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#d0d0d0",
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f9f9f9",
+  },
+  addPhotoBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#208AEF",
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

@@ -3,14 +3,18 @@ import type { Tables, TablesInsert, TablesUpdate } from "@sublets/shared/types";
 
 export type Listing = Tables<"listings">;
 
-export async function getMyListings(profileId: string): Promise<Listing[]> {
+export type ListingWithCover = Tables<"listings"> & {
+  listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
+};
+
+export async function getMyListings(profileId: string): Promise<ListingWithCover[]> {
   const { data, error } = await supabase
     .from("listings")
-    .select("*")
+    .select("*, listing_photos(storage_url, sort_order)")
     .eq("owner_id", profileId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as ListingWithCover[];
 }
 
 export async function getListingById(id: string): Promise<Listing | null> {

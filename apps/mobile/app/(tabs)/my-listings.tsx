@@ -7,10 +7,11 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
-import { getMyListings, type Listing } from "@/lib/listings";
+import { getMyListings, type ListingWithCover } from "@/lib/listings";
 import type { ListingStatus } from "@sublets/shared/types";
 import { LISTING_STATUS_LABEL } from "@sublets/shared/constants";
 
@@ -27,32 +28,51 @@ function ListingCard({
   listing,
   onEdit,
 }: {
-  listing: Listing;
+  listing: ListingWithCover;
   onEdit: () => void;
 }) {
   const sc = STATUS_COLOR[listing.status] ?? STATUS_COLOR.draft;
+  const cover = listing.listing_photos
+    ?.slice()
+    .sort((a, b) => a.sort_order - b.sort_order)[0];
+
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {listing.title}
-        </Text>
-        <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-          <Text style={[styles.statusText, { color: sc.text }]}>
-            {LISTING_STATUS_LABEL[listing.status]}
+      <View style={styles.cardRow}>
+        {cover ? (
+          <Image
+            source={{ uri: cover.storage_url }}
+            style={styles.cardThumb}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.cardThumb, styles.thumbPlaceholder]}>
+            <Text style={styles.thumbPlaceholderText}>No{"\n"}photo</Text>
+          </View>
+        )}
+        <View style={styles.cardContent}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {listing.title}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+              <Text style={[styles.statusText, { color: sc.text }]}>
+                {LISTING_STATUS_LABEL[listing.status]}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.cardMeta}>
+            ${listing.monthly_rent}/mo · {listing.neighborhood}
           </Text>
+          <Text style={styles.cardMeta2}>
+            {listing.housing_type.replace(/_/g, " ")} · {listing.bedrooms} bd ·{" "}
+            {listing.bathrooms} ba
+          </Text>
+          <Pressable style={styles.editBtn} onPress={onEdit}>
+            <Text style={styles.editBtnText}>Edit →</Text>
+          </Pressable>
         </View>
       </View>
-      <Text style={styles.cardMeta}>
-        ${listing.monthly_rent}/mo · {listing.neighborhood}
-      </Text>
-      <Text style={styles.cardMeta2}>
-        {listing.housing_type.replace(/_/g, " ")} · {listing.bedrooms} bd ·{" "}
-        {listing.bathrooms} ba
-      </Text>
-      <Pressable style={styles.editBtn} onPress={onEdit}>
-        <Text style={styles.editBtnText}>Edit →</Text>
-      </Pressable>
     </View>
   );
 }
@@ -61,7 +81,7 @@ export default function MyListingsScreen() {
   const { profile } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<ListingWithCover[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -171,13 +191,36 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 16,
-    gap: 6,
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
+  },
+  cardRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  cardThumb: {
+    width: 80,
+    height: 80,
+    flexShrink: 0,
+  },
+  thumbPlaceholder: {
+    backgroundColor: "#e8ecef",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbPlaceholderText: {
+    fontSize: 11,
+    color: "#aaa",
+    textAlign: "center",
+  },
+  cardContent: {
+    flex: 1,
+    padding: 12,
+    gap: 4,
   },
   cardHeader: {
     flexDirection: "row",
@@ -185,19 +228,19 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 8,
   },
-  cardTitle: { flex: 1, fontSize: 16, fontWeight: "700", color: "#1a1a1a" },
+  cardTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: "#1a1a1a" },
   statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  statusText: { fontSize: 12, fontWeight: "600" },
-  cardMeta: { fontSize: 14, color: "#444" },
-  cardMeta2: { fontSize: 13, color: "#888", textTransform: "capitalize" },
+  statusText: { fontSize: 11, fontWeight: "600" },
+  cardMeta: { fontSize: 13, color: "#444" },
+  cardMeta2: { fontSize: 12, color: "#888", textTransform: "capitalize" },
   editBtn: {
     marginTop: 4,
     alignSelf: "flex-end",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderWidth: 1,
     borderColor: "#208AEF",
     borderRadius: 8,
   },
-  editBtnText: { color: "#208AEF", fontWeight: "600", fontSize: 13 },
+  editBtnText: { color: "#208AEF", fontWeight: "600", fontSize: 12 },
 });
