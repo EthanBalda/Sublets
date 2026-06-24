@@ -12,6 +12,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { getOrCreateConversation, findConversation } from "@/lib/messages";
 import type { InterestRequestStatus, Tables } from "@sublets/shared/types";
 
 // Mirror of web's DEFAULT_CHECKLIST_ITEMS — inserted on accept.
@@ -77,6 +78,7 @@ export default function RequestDetailScreen() {
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [messaging, setMessaging] = useState(false);
 
   const load = useCallback(async () => {
     if (!id || !profile) return;
@@ -218,6 +220,46 @@ export default function RequestDetailScreen() {
     );
   }
 
+  async function handleMessage() {
+    if (!detail || !profile || messaging) return;
+    setMessaging(true);
+
+    try {
+      const isSeeker = detail.seeker_id === profile.id;
+      let convId: string | null;
+
+      if (isSeeker) {
+        // Seeker can create the conversation if it doesn't exist.
+        convId = await getOrCreateConversation(
+          detail.listing_id,
+          profile.id,
+          detail.lister_id
+        );
+      } else {
+        // Lister can only read; seeker must initiate.
+        convId = await findConversation(
+          detail.listing_id,
+          detail.seeker_id,
+          profile.id
+        );
+        if (!convId) {
+          Alert.alert(
+            "No conversation yet",
+            "The seeker hasn't started a conversation. Ask them to tap Message on the request."
+          );
+          setMessaging(false);
+          return;
+        }
+      }
+
+      router.push(`/messages/${convId}`);
+    } catch (e: unknown) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Couldn't open messages.");
+    } finally {
+      setMessaging(false);
+    }
+  }
+
   if (fetching) {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
@@ -239,6 +281,7 @@ export default function RequestDetailScreen() {
 
   const isLister = detail.lister_id === profile?.id;
   const isPending = detail.status === "pending";
+  const isAccepted = detail.status === "accepted";
 
   return (
     <ScrollView
@@ -283,8 +326,8 @@ export default function RequestDetailScreen() {
         </View>
       )}
 
-      {/* Seeker */}
-      {detail.seeker && (
+      {/* Seeker profile — shown to lister */}
+      {isLister && detail.seeker && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>From</Text>
           <Text style={styles.seekerName}>{detail.seeker.full_name}</Text>
@@ -305,7 +348,21 @@ export default function RequestDetailScreen() {
         </View>
       ) : null}
 
-      {/* Actions — only lister sees, only on pending */}
+      {/* Seeker status note */}
+      {!isLister && !isAccepted && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Status</Text>
+          <Text style={styles.statusNote}>
+            {detail.status === "pending"
+              ? "Waiting for the lister to respond."
+              : detail.status === "declined"
+              ? "Your request was declined."
+              : STATUS_LABEL[detail.status]}
+          </Text>
+        </View>
+      )}
+
+      {/* Lister: Accept / Decline (pending only) */}
       {isLister && isPending && (
         <View style={styles.actions}>
           <Pressable
@@ -330,13 +387,28 @@ export default function RequestDetailScreen() {
         </View>
       )}
 
-      {/* Resolved state note for lister */}
-      {isLister && !isPending && (
+      {/* Resolved state note for lister (non-pending) */}
+      {isLister && !isPending && !isAccepted && (
         <View style={styles.resolvedNote}>
           <Text style={styles.resolvedNoteText}>
             This request is {STATUS_LABEL[detail.status].toLowerCase()}.
           </Text>
         </View>
+      )}
+
+      {/* Message button — both parties when accepted */}
+      {isAccepted && (
+        <Pressable
+          style={[styles.messageBtn, messaging && styles.btnDisabled]}
+          onPress={() => void handleMessage()}
+          disabled={messaging}
+        >
+          {messaging ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.messageBtnText}>Message</Text>
+          )}
+        </Pressable>
       )}
     </ScrollView>
   );
@@ -392,6 +464,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     lineHeight: 20,
   },
+  statusNote: { fontSize: 14, color: "#555" },
   actions: { gap: 12, marginTop: 8 },
   acceptBtn: {
     backgroundColor: "#208AEF",
@@ -416,6 +489,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   resolvedNoteText: { fontSize: 14, color: "#888" },
+  messageBtn: {
+    backgroundColor: "#10b981",
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  messageBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   errorText: { fontSize: 15, color: "#dc2626", textAlign: "center" },
   backBtn: {
     backgroundColor: "#208AEF",
