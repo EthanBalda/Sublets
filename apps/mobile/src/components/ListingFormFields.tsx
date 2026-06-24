@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,7 +14,37 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { HOUSING_TYPES, UTILITIES_INCLUDED, LEASE_STATUSES } from "@sublets/shared/constants";
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function parseDateStr(s: string): Date {
+  if (s && /^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date();
+}
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatDateDisplay(s: string): string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return "Select date";
+  const [y, mo, d] = s.split("-").map(Number);
+  return new Date(y, mo - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export interface FormValues {
   title: string;
@@ -64,10 +95,8 @@ export function validateForPublish(v: FormValues): string[] {
   if (!v.monthly_rent || isNaN(rent) || rent <= 0)
     errs.push("Monthly rent must be greater than 0");
   if (!v.utilities_included) errs.push("Utilities is required");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v.available_start_date))
-    errs.push("Start date must be YYYY-MM-DD");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v.available_end_date))
-    errs.push("End date must be YYYY-MM-DD");
+  if (!v.available_start_date) errs.push("Start date is required");
+  if (!v.available_end_date) errs.push("End date is required");
   if (
     v.available_start_date &&
     v.available_end_date &&
@@ -212,8 +241,41 @@ export default function ListingFormFields({
   photos = [],
   onPhotosChange,
 }: ListingFormFieldsProps) {
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [activeDateField, setActiveDateField] = useState<"start" | "end" | null>(null);
+  const [tempDate, setTempDate] = useState(new Date());
+
   function set<K extends keyof FormValues>(key: K, val: FormValues[K]) {
     onChange({ [key]: val } as Partial<FormValues>);
+  }
+
+  function openDatePicker(field: "start" | "end") {
+    const existing = field === "start"
+      ? values.available_start_date
+      : values.available_end_date;
+    setTempDate(parseDateStr(existing));
+    setActiveDateField(field);
+    setShowDatePicker(true);
+  }
+
+  function applyDate(date: Date) {
+    if (!activeDateField) return;
+    set(
+      activeDateField === "start" ? "available_start_date" : "available_end_date",
+      toDateStr(date)
+    );
+  }
+
+  function confirmIOSDate() {
+    applyDate(tempDate);
+    setShowDatePicker(false);
+    setActiveDateField(null);
+  }
+
+  function handleAndroidChange(event: DateTimePickerEvent, date?: Date) {
+    setShowDatePicker(false);
+    if (event.type === "set" && date) applyDate(date);
+    setActiveDateField(null);
   }
 
   async function pickPhoto() {
@@ -231,7 +293,15 @@ export default function ListingFormFields({
       allowsMultipleSelection: false,
     });
     if (!result.canceled && result.assets[0]) {
-      onPhotosChange?.([...photos, result.assets[0].uri]);
+      const asset = result.assets[0];
+      console.log("[ListingFormFields] picked photo:", JSON.stringify({
+        uri: asset.uri.slice(0, 100),
+        mimeType: asset.mimeType,
+        fileName: asset.fileName,
+        width: asset.width,
+        height: asset.height,
+      }));
+      onPhotosChange?.([...photos, asset.uri]);
     }
   }
 
@@ -345,21 +415,41 @@ export default function ListingFormFields({
         </Section>
 
         <Section title="Availability & Lease">
-          <FieldLabel label="Start date (YYYY-MM-DD)" required />
-          <TextInput
-            style={s.input}
-            placeholder="2025-06-15"
-            value={values.available_start_date}
-            onChangeText={(t) => set("available_start_date", t)}
-          />
+          <FieldLabel label="Start date" required />
+          <Pressable
+            style={s.dateBtn}
+            onPress={() => openDatePicker("start")}
+            disabled={submitting}
+          >
+            <Text
+              style={[
+                s.dateBtnText,
+                !values.available_start_date && s.dateBtnPlaceholder,
+              ]}
+            >
+              {values.available_start_date
+                ? formatDateDisplay(values.available_start_date)
+                : "Select start date"}
+            </Text>
+          </Pressable>
 
-          <FieldLabel label="End date (YYYY-MM-DD)" required />
-          <TextInput
-            style={s.input}
-            placeholder="2025-09-15"
-            value={values.available_end_date}
-            onChangeText={(t) => set("available_end_date", t)}
-          />
+          <FieldLabel label="End date" required />
+          <Pressable
+            style={s.dateBtn}
+            onPress={() => openDatePicker("end")}
+            disabled={submitting}
+          >
+            <Text
+              style={[
+                s.dateBtnText,
+                !values.available_end_date && s.dateBtnPlaceholder,
+              ]}
+            >
+              {values.available_end_date
+                ? formatDateDisplay(values.available_end_date)
+                : "Select end date"}
+            </Text>
+          </Pressable>
 
           <FieldLabel label="Lease status" required />
           <SelectPills
@@ -368,6 +458,49 @@ export default function ListingFormFields({
             onChange={(v) => set("lease_status", v)}
           />
         </Section>
+
+        {/* iOS: bottom-sheet modal with Done/Cancel */}
+        {Platform.OS === "ios" && (
+          <Modal
+            visible={showDatePicker}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowDatePicker(false)}
+          >
+            <View style={s.modalOverlay}>
+              <View style={s.modalSheet}>
+                <View style={s.modalHeader}>
+                  <Pressable onPress={() => { setShowDatePicker(false); setActiveDateField(null); }}>
+                    <Text style={s.modalCancel}>Cancel</Text>
+                  </Pressable>
+                  <Text style={s.modalTitle}>
+                    {activeDateField === "start" ? "Start Date" : "End Date"}
+                  </Text>
+                  <Pressable onPress={confirmIOSDate}>
+                    <Text style={s.modalDone}>Done</Text>
+                  </Pressable>
+                </View>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={(_, d) => { if (d) setTempDate(d); }}
+                  style={s.iosPicker}
+                />
+              </View>
+            </View>
+          </Modal>
+        )}
+
+        {/* Android: native dialog, no modal wrapper needed */}
+        {Platform.OS === "android" && showDatePicker && (
+          <DateTimePicker
+            value={tempDate}
+            mode="date"
+            display="default"
+            onChange={handleAndroidChange}
+          />
+        )}
 
         <Section title="Location">
           <FieldLabel label="Neighborhood" required />
@@ -602,4 +735,38 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
   },
+  dateBtn: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dateBtnText: { fontSize: 15, color: "#1a1a1a" },
+  dateBtnPlaceholder: { color: "#aaa" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  modalTitle: { fontSize: 16, fontWeight: "700", color: "#1a1a1a" },
+  modalCancel: { fontSize: 16, color: "#888" },
+  modalDone: { fontSize: 16, fontWeight: "700", color: "#208AEF" },
+  iosPicker: { height: 200 },
 });
