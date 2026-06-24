@@ -252,7 +252,7 @@ export default function RequestDetailScreen() {
         }
       }
 
-      router.push(`/messages/${convId}`);
+      router.push(`/message/${convId}`);
     } catch (e: unknown) {
       Alert.alert("Error", e instanceof Error ? e.message : "Couldn't open messages.");
     } finally {

@@ -41,7 +41,8 @@ export default function MessagesScreen() {
     setError(null);
     try {
       setConvos(await getMyConversations(profile.id));
-    } catch {
+    } catch (e: unknown) {
+      console.error("[MessagesTab] load error:", e instanceof Error ? e.message : String(e));
       setError("Couldn't load messages.");
     } finally {
       setFetching(false);
@@ -86,7 +87,7 @@ export default function MessagesScreen() {
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
-              onPress={() => router.push(`/messages/${item.id}`)}
+              onPress={() => router.push(`/message/${item.id}`)}
             >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
