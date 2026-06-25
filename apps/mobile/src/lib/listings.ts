@@ -7,6 +7,10 @@ export type ListingWithCover = Tables<"listings"> & {
   listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
 };
 
+export type ListingWithPhotos = Tables<"listings"> & {
+  listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
+};
+
 export async function getMyListings(profileId: string): Promise<ListingWithCover[]> {
   const { data, error } = await supabase
     .from("listings")
@@ -25,6 +29,16 @@ export async function getListingById(id: string): Promise<Listing | null> {
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+export async function getListingWithPhotos(id: string): Promise<ListingWithPhotos | null> {
+  const { data, error } = await supabase
+    .from("listings")
+    .select("*, listing_photos(storage_url, sort_order)")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as unknown as ListingWithPhotos | null;
 }
 
 export async function insertListing(insert: TablesInsert<"listings">): Promise<Listing> {

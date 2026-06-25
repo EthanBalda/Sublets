@@ -323,6 +323,15 @@ export default function RequestDetailScreen() {
           <Text style={styles.listingMeta}>
             {detail.listing.bedrooms} bd · {detail.listing.bathrooms} ba
           </Text>
+          <Pressable
+            onPress={() =>
+              router.push(
+                `/listings/${detail.listing_id}` as Parameters<typeof router.push>[0]
+              )
+            }
+          >
+            <Text style={styles.viewListingLink}>View Listing →</Text>
+          </Pressable>
         </View>
       )}
 
@@ -455,6 +464,7 @@ const styles = StyleSheet.create({
   },
   listingTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a" },
   listingMeta: { fontSize: 14, color: "#555" },
+  viewListingLink: { fontSize: 14, color: "#208AEF", fontWeight: "600", marginTop: 6 },
   seekerName: { fontSize: 16, fontWeight: "700", color: "#1a1a1a" },
   seekerMeta: { fontSize: 14, color: "#555" },
   seekerBio: { fontSize: 14, color: "#666", marginTop: 4 },

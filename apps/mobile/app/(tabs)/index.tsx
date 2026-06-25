@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   cancelAnimation,
@@ -37,6 +38,7 @@ function SwipeCard({
   disabled,
   onPass,
   onRequest,
+  onTapDetail,
 }: {
   listing: ListingWithPhotos;
   translateX: SharedValue<number>;
@@ -44,10 +46,16 @@ function SwipeCard({
   disabled: boolean;
   onPass: () => void;
   onRequest: () => void;
+  onTapDetail: () => void;
 }) {
-  const photo = listing.listing_photos
+  const [photoIndex, setPhotoIndex] = useState(0);
+
+  const sortedPhotos = listing.listing_photos
     .slice()
-    .sort((a, b) => a.sort_order - b.sort_order)[0];
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((p) => p.storage_url);
+
+  const photo = sortedPhotos[photoIndex] ?? null;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -65,9 +73,6 @@ function SwipeCard({
     })
     .onEnd((e) => {
       if (e.translationX > SWIPE_THRESHOLD) {
-        // Start immediate visual response on UI thread. handleRequest will
-        // also call withSpring when it runs on the JS thread — reinforcing
-        // this animation is harmless and handles the button-tap path too.
         translateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
         runOnJS(onRequest)();
       } else if (e.translationX < -SWIPE_THRESHOLD) {
@@ -82,18 +87,47 @@ function SwipeCard({
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.card, animatedStyle]}>
-        {photo ? (
-          <Image
-            source={{ uri: photo.storage_url }}
-            style={styles.photo}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[styles.photo, styles.photoPlaceholder]}>
-            <Text style={styles.photoPlaceholderText}>No photo</Text>
-          </View>
-        )}
-        <View style={styles.cardInfo}>
+        {/* Photo with tap-left / tap-right zones */}
+        <View style={styles.photoContainer}>
+          {photo ? (
+            <Image
+              source={{ uri: photo }}
+              style={styles.photo}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.photo, styles.photoPlaceholder]}>
+              <Text style={styles.photoPlaceholderText}>No photo</Text>
+            </View>
+          )}
+
+          {sortedPhotos.length > 1 && (
+            <>
+              <Pressable
+                style={[styles.tapZone, styles.tapZoneLeft]}
+                onPress={() =>
+                  setPhotoIndex((i) => Math.max(0, i - 1))
+                }
+              />
+              <Pressable
+                style={[styles.tapZone, styles.tapZoneRight]}
+                onPress={() =>
+                  setPhotoIndex((i) =>
+                    Math.min(sortedPhotos.length - 1, i + 1)
+                  )
+                }
+              />
+              <View style={styles.photoIndicator}>
+                <Text style={styles.photoIndicatorText}>
+                  {photoIndex + 1} / {sortedPhotos.length}
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Info area — tap to open detail */}
+        <Pressable style={styles.cardInfo} onPress={onTapDetail}>
           <Text style={styles.cardTitle} numberOfLines={2}>
             {listing.title}
           </Text>
@@ -101,10 +135,11 @@ function SwipeCard({
             ${listing.monthly_rent}/mo · {listing.neighborhood}
           </Text>
           <Text style={styles.cardMeta2}>
-            {listing.housing_type} · {listing.bedrooms} bd ·{" "}
+            {listing.housing_type.replace(/_/g, " ")} · {listing.bedrooms} bd ·{" "}
             {listing.bathrooms} ba
           </Text>
-        </View>
+          <Text style={styles.viewDetail}>View details →</Text>
+        </Pressable>
       </Animated.View>
     </GestureDetector>
   );
@@ -112,23 +147,20 @@ function SwipeCard({
 
 export default function FeedScreen() {
   const { profile } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [listings, setListings] = useState<ListingWithPhotos[]>([]);
   const [index, setIndex] = useState(0);
   const [fetching, setFetching] = useState(true);
   const [requesting, setRequesting] = useState(false);
 
-  // Shared animation values live in the parent so handleRequest can
-  // snap the card back on insert failure without losing the animation state.
   const cardTranslateX = useSharedValue(0);
   const cardTranslateY = useSharedValue(0);
 
-  // Guard against requesting the same listing twice if swipe + button fire together.
   const lastRequestedId = useRef<string | null>(null);
 
   const currentListing = listings[index];
 
-  // profile?.id as a primitive dep is intentional — avoids re-running on reference churn.
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (profile) loadListings();
@@ -174,15 +206,11 @@ export default function FeedScreen() {
     if (!profile || requesting) return;
     const listing = listings[index];
     if (!listing) return;
-    // Guard: prevent a swipe + button tap from firing two inserts for the same card.
     if (lastRequestedId.current === listing.id) return;
 
     lastRequestedId.current = listing.id;
     setRequesting(true);
 
-    // Animate card off screen to the right. For swipe, the gesture already
-    // started this spring; calling it again just reinforces the target.
-    // For button tap, this is the only animation trigger.
     cardTranslateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
 
     const { error } = await supabase.from("interest_requests").insert({
@@ -193,14 +221,11 @@ export default function FeedScreen() {
     });
 
     if (!error || error.code === "23505") {
-      // Success, or duplicate (seeker already has a request for this listing).
-      // Reset animation values before advancing so the new card renders at 0.
       cardTranslateX.value = 0;
       cardTranslateY.value = 0;
       setIndex((i) => i + 1);
     } else {
-      // Insert failed — snap card back and surface the error.
-      lastRequestedId.current = null; // allow retry
+      lastRequestedId.current = null;
       cancelAnimation(cardTranslateX);
       cancelAnimation(cardTranslateY);
       cardTranslateX.value = withSpring(0, { damping: 20 });
@@ -255,6 +280,11 @@ export default function FeedScreen() {
             disabled={requesting}
             onPass={handlePass}
             onRequest={() => void handleRequest()}
+            onTapDetail={() =>
+              router.push(
+                `/listings/${currentListing.id}` as Parameters<typeof router.push>[0]
+              )
+            }
           />
         ) : (
           <View style={styles.empty}>
@@ -321,17 +351,37 @@ const styles = StyleSheet.create({
     elevation: 5,
     overflow: "hidden",
   },
-  photo: { width: "100%", height: 280 },
+  photoContainer: { position: "relative" },
+  photo: { width: "100%", height: 240 },
   photoPlaceholder: {
     backgroundColor: "#e8ecef",
     justifyContent: "center",
     alignItems: "center",
   },
   photoPlaceholderText: { color: "#aaa", fontSize: 15 },
-  cardInfo: { padding: 16, gap: 4 },
-  cardTitle: { fontSize: 18, fontWeight: "700", color: "#1a1a1a" },
-  cardMeta: { fontSize: 15, color: "#444" },
-  cardMeta2: { fontSize: 14, color: "#777" },
+  tapZone: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: "33%",
+  },
+  tapZoneLeft: { left: 0 },
+  tapZoneRight: { right: 0 },
+  photoIndicator: {
+    position: "absolute",
+    bottom: 8,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  photoIndicatorText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  cardInfo: { padding: 14, gap: 3 },
+  cardTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a" },
+  cardMeta: { fontSize: 14, color: "#444" },
+  cardMeta2: { fontSize: 13, color: "#777", textTransform: "capitalize" },
+  viewDetail: { fontSize: 12, color: "#208AEF", fontWeight: "600", marginTop: 2 },
   actions: {
     flexDirection: "row",
     paddingHorizontal: 32,

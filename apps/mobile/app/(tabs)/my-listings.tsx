@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -27,9 +26,11 @@ const STATUS_COLOR: Record<ListingStatus, { bg: string; text: string }> = {
 
 function ListingCard({
   listing,
+  onPress,
   onEdit,
 }: {
   listing: ListingWithCover;
+  onPress: () => void;
   onEdit: () => void;
 }) {
   const sc = STATUS_COLOR[listing.status] ?? STATUS_COLOR.draft;
@@ -38,7 +39,7 @@ function ListingCard({
     .sort((a, b) => a.sort_order - b.sort_order)[0];
 
   return (
-    <View style={styles.card}>
+    <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.cardRow}>
         {cover ? (
           <Image
@@ -52,19 +53,6 @@ function ListingCard({
           </View>
         )}
         <View style={styles.cardContent}>
-          {/* DEBUG — cover URL + open button */}
-          {cover ? (
-            <View style={styles.debugUrlBox}>
-              <Text style={styles.debugUrl} selectable numberOfLines={2}>
-                {cover.storage_url}
-              </Text>
-              <Pressable onPress={() => void Linking.openURL(cover.storage_url)}>
-                <Text style={styles.openBtn}>Open in browser</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Text style={styles.debugUrl}>no cover URL</Text>
-          )}
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle} numberOfLines={2}>
               {listing.title}
@@ -87,7 +75,7 @@ function ListingCard({
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -154,8 +142,15 @@ export default function MyListingsScreen() {
           renderItem={({ item }) => (
             <ListingCard
               listing={item}
+              onPress={() =>
+                router.push(
+                  `/listings/${item.id}` as Parameters<typeof router.push>[0]
+                )
+              }
               onEdit={() =>
-                router.push(`/listings/${item.id}/edit` as Parameters<typeof router.push>[0])
+                router.push(
+                  `/listings/${item.id}/edit` as Parameters<typeof router.push>[0]
+                )
               }
             />
           )}
@@ -257,7 +252,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   editBtnText: { color: "#208AEF", fontWeight: "600", fontSize: 12 },
-  debugUrlBox: { marginBottom: 4 },
-  debugUrl: { fontSize: 10, color: "#888", flexShrink: 1 },
-  openBtn: { fontSize: 11, color: "#208AEF", fontWeight: "600", marginTop: 2 },
 });

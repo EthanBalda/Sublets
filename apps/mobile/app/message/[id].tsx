@@ -15,6 +15,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { getMessages, sendMessage, type ThreadMessage } from "@/lib/messages";
+import { supabase } from "@/lib/supabase";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], {
@@ -30,6 +31,7 @@ export default function MessageThreadScreen() {
   const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const [listingId, setListingId] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -39,8 +41,16 @@ export default function MessageThreadScreen() {
   const load = useCallback(async () => {
     if (!conversationId) return;
     try {
-      const msgs = await getMessages(conversationId);
+      const [msgs, convoRes] = await Promise.all([
+        getMessages(conversationId),
+        supabase
+          .from("conversations")
+          .select("listing_id")
+          .eq("id", conversationId)
+          .maybeSingle(),
+      ]);
       setMessages(msgs);
+      setListingId(convoRes.data?.listing_id ?? null);
     } catch {
       // Silently retry on focus.
     } finally {
@@ -99,7 +109,19 @@ export default function MessageThreadScreen() {
             <Text style={styles.backText}>← Back</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Conversation</Text>
-          <View style={styles.headerSpacer} />
+          {listingId ? (
+            <Pressable
+              onPress={() =>
+                router.push(
+                  `/listings/${listingId}` as Parameters<typeof router.push>[0]
+                )
+              }
+            >
+              <Text style={styles.viewListingLink}>Listing</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
         </View>
 
         {/* Messages */}
@@ -178,6 +200,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 15, color: "#208AEF", fontWeight: "600" },
   headerTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a" },
   headerSpacer: { minWidth: 60 },
+  viewListingLink: { fontSize: 13, color: "#208AEF", fontWeight: "600", minWidth: 60, textAlign: "right" },
   messageList: { padding: 16, gap: 8 },
   messageListEmpty: { flex: 1 },
   emptyWrap: { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 48 },
