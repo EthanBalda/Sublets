@@ -88,9 +88,9 @@ export const defaultFormValues: FormValues = {
 
 export function validateForPublish(v: FormValues): string[] {
   const errs: string[] = [];
-  if (!v.title.trim()) errs.push("Title is required");
+  if (v.title.trim().length < 3) errs.push("Title must be at least 3 characters");
   if (!v.housing_type) errs.push("Housing type is required");
-  if (!v.description.trim()) errs.push("Description is required");
+  if (v.description.trim().length < 20) errs.push("Description must be at least 20 characters");
   const rent = Number(v.monthly_rent);
   if (!v.monthly_rent || isNaN(rent) || rent <= 0)
     errs.push("Monthly rent must be greater than 0");
@@ -293,15 +293,7 @@ export default function ListingFormFields({
       allowsMultipleSelection: false,
     });
     if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      console.log("[ListingFormFields] picked photo:", JSON.stringify({
-        uri: asset.uri.slice(0, 100),
-        mimeType: asset.mimeType,
-        fileName: asset.fileName,
-        width: asset.width,
-        height: asset.height,
-      }));
-      onPhotosChange?.([...photos, asset.uri]);
+      onPhotosChange?.([...photos, result.assets[0].uri]);
     }
   }
 

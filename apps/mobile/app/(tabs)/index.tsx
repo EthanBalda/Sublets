@@ -152,6 +152,7 @@ export default function FeedScreen() {
   const [listings, setListings] = useState<ListingWithPhotos[]>([]);
   const [index, setIndex] = useState(0);
   const [fetching, setFetching] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
 
   const cardTranslateX = useSharedValue(0);
@@ -170,36 +171,44 @@ export default function FeedScreen() {
   async function loadListings() {
     if (!profile) return;
     setFetching(true);
+    setFeedError(null);
 
-    const [listingsRes, requestsRes] = await Promise.all([
-      supabase
-        .from("listings")
-        .select("*, listing_photos(storage_url, sort_order)")
-        .eq("status", "published")
-        .eq("campus_id", profile.campus_id)
-        .neq("owner_id", profile.id)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from("interest_requests")
-        .select("listing_id")
-        .eq("seeker_id", profile.id)
-        .in("status", ["pending", "accepted"]),
-    ]);
+    try {
+      const [listingsRes, requestsRes] = await Promise.all([
+        supabase
+          .from("listings")
+          .select("*, listing_photos(storage_url, sort_order)")
+          .eq("status", "published")
+          .eq("campus_id", profile.campus_id)
+          .neq("owner_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("interest_requests")
+          .select("listing_id")
+          .eq("seeker_id", profile.id)
+          .in("status", ["pending", "accepted"]),
+      ]);
 
-    const excluded = new Set(
-      (requestsRes.data ?? []).map((r) => r.listing_id)
-    );
-    const filtered = (
-      (listingsRes.data ?? []) as unknown as ListingWithPhotos[]
-    ).filter((l) => !excluded.has(l.id));
+      if (listingsRes.error) throw listingsRes.error;
 
-    setListings(filtered);
-    setIndex(0);
-    lastRequestedId.current = null;
-    cardTranslateX.value = 0;
-    cardTranslateY.value = 0;
-    setFetching(false);
+      const excluded = new Set(
+        (requestsRes.data ?? []).map((r) => r.listing_id)
+      );
+      const filtered = (
+        (listingsRes.data ?? []) as unknown as ListingWithPhotos[]
+      ).filter((l) => !excluded.has(l.id));
+
+      setListings(filtered);
+      setIndex(0);
+      lastRequestedId.current = null;
+      cardTranslateX.value = 0;
+      cardTranslateY.value = 0;
+    } catch (e: unknown) {
+      setFeedError(e instanceof Error ? e.message : "Couldn't load listings.");
+    } finally {
+      setFetching(false);
+    }
   }
 
   async function handleRequest() {
@@ -271,7 +280,15 @@ export default function FeedScreen() {
       </View>
 
       <View style={styles.cardArea}>
-        {currentListing ? (
+        {feedError ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>{"Couldn't load listings"}</Text>
+            <Text style={styles.emptyText}>{feedError}</Text>
+            <Pressable style={styles.refreshBtn} onPress={() => void loadListings()}>
+              <Text style={styles.refreshBtnText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : currentListing ? (
           <SwipeCard
             key={currentListing.id}
             listing={currentListing}
@@ -292,6 +309,7 @@ export default function FeedScreen() {
             <Text style={styles.emptyText}>
               No more listings right now. Check back later.
             </Text>
+
             <Pressable style={styles.refreshBtn} onPress={() => void loadListings()}>
               <Text style={styles.refreshBtnText}>Refresh</Text>
             </Pressable>

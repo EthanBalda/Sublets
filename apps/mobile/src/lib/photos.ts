@@ -6,6 +6,15 @@ function getPublicUrl(path: string): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+// Extract the storage object path from a public URL so we can delete it.
+// The marker `/storage/v1/object/public/<bucket>/` is stable across projects.
+function extractStoragePath(url: string): string | null {
+  const marker = `/storage/v1/object/public/${BUCKET}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return decodeURIComponent(url.slice(idx + marker.length));
+}
+
 // Infer content type from the URI's file extension.
 // expo-image-picker always returns a file:// URI so extension is reliable.
 function inferContentType(uri: string): string {
@@ -30,8 +39,6 @@ function buildFilename(localUri: string, index: number): string {
 
 async function uploadPhoto(localUri: string, path: string): Promise<string> {
   const contentType = inferContentType(localUri);
-  console.log(`[photos] uploading: path=${path} type=${contentType}`);
-  console.log(`[photos] localUri: ${localUri.slice(0, 100)}`);
 
   // Use arrayBuffer() instead of blob(). React Native's Blob polyfill can
   // silently produce an empty or unreadable body when passed to Supabase's
@@ -44,31 +51,14 @@ async function uploadPhoto(localUri: string, path: string): Promise<string> {
       "Photo file read as empty — the local URI may be invalid or inaccessible."
     );
   }
-  console.log(`[photos] read ${arrayBuffer.byteLength} bytes`);
 
-  const { data: uploadData, error } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
+  const { error } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
     contentType,
     upsert: true,
   });
-  console.log(`[photos] upload result: data=${JSON.stringify(uploadData)} error=${error?.message ?? "none"}`);
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
-  const url = getPublicUrl(path);
-  console.log(`[photos] public URL: ${url}`);
-
-  // Immediately verify the object is readable at the public URL.
-  try {
-    const v = await fetch(url);
-    console.log(
-      `[photos] verify fetch: status=${v.status}`,
-      `type=${v.headers.get("content-type")}`,
-      `len=${v.headers.get("content-length")}`
-    );
-  } catch (verifyErr) {
-    console.warn("[photos] verify fetch threw:", verifyErr);
-  }
-
-  return url;
+  return getPublicUrl(path);
 }
 
 /**
@@ -81,12 +71,10 @@ export async function resolvePhotos(
   listingId: string,
   authUid: string
 ): Promise<string[]> {
-  console.log(`[photos] resolvePhotos: ${uris.length} uris for listing ${listingId}`);
   const results: string[] = [];
   for (let i = 0; i < uris.length; i++) {
     const uri = uris[i];
     if (uri.startsWith("https://")) {
-      console.log(`[photos] keeping existing URL at index ${i}`);
       results.push(uri);
     } else {
       const filename = buildFilename(uri, i);
@@ -94,16 +82,41 @@ export async function resolvePhotos(
       results.push(await uploadPhoto(uri, path));
     }
   }
-  console.log(`[photos] resolvePhotos done: ${results.length} URLs`);
   return results;
 }
 
-/** Mirrors web's replacePhotos(): delete all rows then re-insert sorted. */
+/**
+ * Replace all listing_photos rows for a listing, deleting removed storage
+ * objects from the bucket so orphaned files don't accumulate.
+ */
 export async function replaceListingPhotos(
   listingId: string,
   urls: string[]
 ): Promise<void> {
-  console.log(`[photos] replaceListingPhotos: ${urls.length} rows for listing ${listingId}`);
+  // Fetch existing URLs before deleting rows so we can clean up storage objects.
+  const { data: existing } = await supabase
+    .from("listing_photos")
+    .select("storage_url")
+    .eq("listing_id", listingId);
+
+  const newUrlSet = new Set(urls);
+  const pathsToDelete = (existing ?? [])
+    .map((r) => r.storage_url)
+    .filter((url) => !newUrlSet.has(url))
+    .map(extractStoragePath)
+    .filter((p): p is string => p !== null);
+
+  // Delete storage objects that are no longer referenced. Non-fatal if partial.
+  if (pathsToDelete.length > 0) {
+    const { error: storageErr } = await supabase.storage
+      .from(BUCKET)
+      .remove(pathsToDelete);
+    if (storageErr && __DEV__) {
+      console.warn("[photos] storage cleanup partial failure:", storageErr.message);
+    }
+  }
+
+  // Replace DB rows.
   const { error: delErr } = await supabase
     .from("listing_photos")
     .delete()
@@ -116,7 +129,6 @@ export async function replaceListingPhotos(
     storage_url,
     sort_order,
   }));
-  console.log(`[photos] inserting rows:`, JSON.stringify(rows.map(r => r.storage_url.slice(0, 60))));
 
   const { error } = await supabase.from("listing_photos").insert(rows);
   if (error) throw new Error(`listing_photos insert failed: ${error.message}`);

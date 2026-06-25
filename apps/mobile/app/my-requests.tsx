@@ -138,7 +138,10 @@ export default function MyRequestsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <Pressable
+              style={styles.card}
+              onPress={() => router.push(`/request/${item.id}`)}
+            >
               <View style={styles.cardTop}>
                 <Text style={styles.listingTitle} numberOfLines={1}>
                   {item.listing_title ?? "Listing"}
@@ -155,7 +158,7 @@ export default function MyRequestsScreen() {
               <Text style={styles.dateText}>
                 {new Date(item.created_at).toLocaleDateString()}
               </Text>
-            </View>
+            </Pressable>
           )}
         />
       )}

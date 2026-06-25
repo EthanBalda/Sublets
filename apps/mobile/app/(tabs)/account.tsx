@@ -1,6 +1,7 @@
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Constants from "expo-constants";
 import { useAuth } from "@/context/AuthContext";
 import type { ProfileRole } from "@sublets/shared/types";
 
@@ -83,6 +84,10 @@ export default function AccountScreen() {
       <Pressable style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutBtnText}>Log Out</Text>
       </Pressable>
+
+      <Text style={styles.versionText}>
+        Sublets v{Constants.expoConfig?.version ?? "—"}
+      </Text>
     </ScrollView>
   );
 }
@@ -142,4 +147,5 @@ const styles = StyleSheet.create({
   },
   logoutBtnText: { fontSize: 15, fontWeight: "600", color: "#dc2626" },
   errorText: { fontSize: 15, color: "#dc2626" },
+  versionText: { fontSize: 12, color: "#bbb", textAlign: "center", marginTop: 4 },
 });
