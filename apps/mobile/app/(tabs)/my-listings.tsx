@@ -12,6 +12,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { getMyListings, type ListingWithCover } from "@/lib/listings";
+import { fmtUnitMeta } from "@/lib/format";
 import type { ListingStatus } from "@sublets/shared/types";
 import { LISTING_STATUS_LABEL } from "@sublets/shared/constants";
 
@@ -67,8 +68,7 @@ function ListingCard({
             ${listing.monthly_rent}/mo · {listing.neighborhood}
           </Text>
           <Text style={styles.cardMeta2}>
-            {listing.housing_type.replace(/_/g, " ")} · {listing.bedrooms} bd ·{" "}
-            {listing.bathrooms} ba
+            {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
           </Text>
           <Pressable style={styles.editBtn} onPress={onEdit}>
             <Text style={styles.editBtnText}>Edit →</Text>

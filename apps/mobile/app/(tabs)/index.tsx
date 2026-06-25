@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -22,6 +23,7 @@ import type { SharedValue } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { fmtHousingType, fmtUnitMeta } from "@/lib/format";
 import type { Tables } from "@sublets/shared/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -40,9 +42,6 @@ function fmtDateShort(s: string | null | undefined): string {
   });
 }
 
-function capitalizeWords(s: string): string {
-  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function SwipeCard({
   listing,
@@ -138,7 +137,8 @@ function SwipeCard({
             />
           ) : (
             <View style={[styles.photo, styles.photoPlaceholder]}>
-              <Text style={styles.photoPlaceholderText}>No photo</Text>
+              <Ionicons name="image-outline" size={44} color="#b8c8e0" />
+              <Text style={styles.photoPlaceholderText}>No photos yet</Text>
             </View>
           )}
 
@@ -176,14 +176,17 @@ function SwipeCard({
           <View style={styles.cardInfoTop}>
             <Text style={styles.cardRent}>${listing.monthly_rent}/mo</Text>
             <Text style={styles.cardBeds}>
-              {listing.bedrooms} bd · {listing.bathrooms} ba
+              {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
             </Text>
           </View>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {listing.title}
-          </Text>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {listing.title}
+            </Text>
+            <Text style={styles.cardChevron}>›</Text>
+          </View>
           <Text style={styles.cardMeta}>
-            {capitalizeWords(listing.housing_type)} in {listing.neighborhood}
+            {fmtHousingType(listing.housing_type, listing.bedrooms)} in {listing.neighborhood}
             {dateRange ? `  ·  ${dateRange}` : ""}
           </Text>
           {listing.description ? (
@@ -432,7 +435,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 48, // asymmetric: shifts card upward from dead center
   },
   card: {
     width: SCREEN_WIDTH - 32,
@@ -481,11 +486,12 @@ const styles = StyleSheet.create({
   photoContainer: { position: "relative" },
   photo: { width: "100%", height: 240 },
   photoPlaceholder: {
-    backgroundColor: "#e8ecef",
+    backgroundColor: "#eef2f8",
     justifyContent: "center",
     alignItems: "center",
+    gap: 6,
   },
-  photoPlaceholderText: { color: "#aaa", fontSize: 15 },
+  photoPlaceholderText: { color: "#94a3b8", fontSize: 13, fontWeight: "500" },
   // Story-style photo progress bars
   photoBars: {
     position: "absolute",
@@ -524,8 +530,14 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#208AEF",
   },
-  cardBeds: { fontSize: 13, color: "#888", fontWeight: "500" },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: "#1a1a1a" },
+  cardBeds: { fontSize: 12, color: "#94a3b8", fontWeight: "500" },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: "#1a1a1a", flex: 1 },
+  cardChevron: { fontSize: 20, color: "#d1d5db", marginLeft: 6 },
   cardMeta: { fontSize: 13, color: "#666" },
   cardDesc: { fontSize: 13, color: "#999", lineHeight: 18, marginTop: 1 },
   // Action buttons

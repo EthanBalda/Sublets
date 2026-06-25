@@ -16,6 +16,7 @@ import { getListingWithPhotos, type ListingWithPhotos } from "@/lib/listings";
 import { supabase } from "@/lib/supabase";
 import ListingPhotoCarousel from "@/components/ListingPhotoCarousel";
 import { HOUSING_TYPES, UTILITIES_INCLUDED, LEASE_STATUSES, labelFor, LISTING_STATUS_LABEL } from "@sublets/shared/constants";
+import { fmtUnitMeta } from "@/lib/format";
 import type { Tables } from "@sublets/shared/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -172,7 +173,7 @@ export default function ListingDetailScreen() {
             {listing.neighborhood} · {labelFor(HOUSING_TYPES, listing.housing_type)}
           </Text>
           <Text style={styles.meta2}>
-            {listing.bedrooms} bd · {listing.bathrooms} ba
+            {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
           </Text>
         </View>
 
