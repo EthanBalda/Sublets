@@ -40,6 +40,10 @@ function fmtDateShort(s: string | null | undefined): string {
   });
 }
 
+function capitalizeWords(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function SwipeCard({
   listing,
   translateX,
@@ -138,52 +142,55 @@ function SwipeCard({
             </View>
           )}
 
+          {/* Progress bars always rendered when there are photos */}
           {sortedPhotos.length > 1 && (
-            <>
-              {/* Progress bars across the top of the photo */}
-              <View style={styles.photoBars} pointerEvents="none">
-                {sortedPhotos.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[styles.photoBar, i === photoIndex && styles.photoBarActive]}
-                  />
-                ))}
-              </View>
-
-              <Pressable
-                style={[styles.tapZone, styles.tapZoneLeft]}
-                onPress={() => setPhotoIndex((i) => Math.max(0, i - 1))}
-              />
-              <Pressable
-                style={[styles.tapZone, styles.tapZoneRight]}
-                onPress={() =>
-                  setPhotoIndex((i) => Math.min(sortedPhotos.length - 1, i + 1))
-                }
-              />
-            </>
+            <View style={styles.photoBars} pointerEvents="none">
+              {sortedPhotos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.photoBar, i === photoIndex && styles.photoBarActive]}
+                />
+              ))}
+            </View>
           )}
+
+          {/* Tap zones: narrow edges cycle photos; center opens detail */}
+          <Pressable
+            style={[styles.tapZone, styles.tapZoneLeft]}
+            onPress={() => setPhotoIndex((i) => Math.max(0, i - 1))}
+          />
+          <Pressable
+            style={[styles.tapZone, styles.tapZoneCenter]}
+            onPress={onTapDetail}
+          />
+          <Pressable
+            style={[styles.tapZone, styles.tapZoneRight]}
+            onPress={() =>
+              setPhotoIndex((i) => Math.min(sortedPhotos.length - 1, i + 1))
+            }
+          />
         </View>
 
-        {/* Info area — tap to open detail */}
+        {/* Info area — tapping opens detail (photo center zone also opens detail) */}
         <Pressable style={styles.cardInfo} onPress={onTapDetail}>
-          <Text style={styles.cardRent}>${listing.monthly_rent}/mo</Text>
+          <View style={styles.cardInfoTop}>
+            <Text style={styles.cardRent}>${listing.monthly_rent}/mo</Text>
+            <Text style={styles.cardBeds}>
+              {listing.bedrooms} bd · {listing.bathrooms} ba
+            </Text>
+          </View>
           <Text style={styles.cardTitle} numberOfLines={1}>
             {listing.title}
           </Text>
           <Text style={styles.cardMeta}>
-            {listing.neighborhood}
-            {dateRange ? ` · ${dateRange}` : ""}
-          </Text>
-          <Text style={styles.cardMeta2}>
-            {listing.housing_type.replace(/_/g, " ")} · {listing.bedrooms} bd ·{" "}
-            {listing.bathrooms} ba
+            {capitalizeWords(listing.housing_type)} in {listing.neighborhood}
+            {dateRange ? `  ·  ${dateRange}` : ""}
           </Text>
           {listing.description ? (
             <Text style={styles.cardDesc} numberOfLines={2}>
               {listing.description}
             </Text>
           ) : null}
-          <Text style={styles.viewDetail}>View details →</Text>
         </Pressable>
       </Animated.View>
     </GestureDetector>
@@ -332,7 +339,10 @@ export default function FeedScreen() {
       ]}
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Sublets</Text>
+        <View>
+          <Text style={styles.headerTitle}>Discover</Text>
+          <Text style={styles.headerSub}>UCSD housing near you</Text>
+        </View>
         {!feedError && remaining > 0 && (
           <Text style={styles.headerCount}>
             {remaining} {remaining === 1 ? "listing" : "listings"} left
@@ -407,7 +417,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     backgroundColor: "#fff",
@@ -415,7 +425,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#1a1a1a" },
+  headerSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
   headerCount: { fontSize: 13, color: "#aaa", fontWeight: "500" },
   cardArea: {
     flex: 1,
@@ -497,28 +508,26 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     bottom: 0,
-    width: "33%",
   },
-  tapZoneLeft: { left: 0 },
-  tapZoneRight: { right: 0 },
+  tapZoneLeft: { left: 0, width: "20%" },
+  tapZoneCenter: { left: "20%", right: "20%" },
+  tapZoneRight: { right: 0, width: "20%" },
   // Card info
-  cardInfo: { padding: 16, gap: 4 },
+  cardInfo: { padding: 14, paddingTop: 12, gap: 3 },
+  cardInfoTop: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
   cardRent: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
     color: "#208AEF",
-    lineHeight: 28,
   },
-  cardTitle: { fontSize: 16, fontWeight: "700", color: "#1a1a1a" },
-  cardMeta: { fontSize: 13, color: "#555" },
-  cardMeta2: { fontSize: 12, color: "#888", textTransform: "capitalize" },
-  cardDesc: { fontSize: 13, color: "#777", lineHeight: 18, marginTop: 2 },
-  viewDetail: {
-    fontSize: 12,
-    color: "#208AEF",
-    fontWeight: "600",
-    marginTop: 4,
-  },
+  cardBeds: { fontSize: 13, color: "#888", fontWeight: "500" },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: "#1a1a1a" },
+  cardMeta: { fontSize: 13, color: "#666" },
+  cardDesc: { fontSize: 13, color: "#999", lineHeight: 18, marginTop: 1 },
   // Action buttons
   actions: {
     flexDirection: "row",
