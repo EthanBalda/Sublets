@@ -8,6 +8,8 @@ interface Props {
   photos: string[];
   height: number;
   showIndicator?: boolean;
+  /** Show story-style progress bars at the top instead of the "1/N" pill. */
+  showBars?: boolean;
   fallbackLabel?: string;
   width?: number;
 }
@@ -16,6 +18,7 @@ export default function ListingPhotoCarousel({
   photos,
   height,
   showIndicator = true,
+  showBars = false,
   fallbackLabel = "No photo",
   width,
 }: Props) {
@@ -55,6 +58,23 @@ export default function ListingPhotoCarousel({
 
       {sorted.length > 1 && (
         <>
+          {showBars ? (
+            <View style={styles.bars} pointerEvents="none">
+              {sorted.map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.bar, i === index && styles.barActive]}
+                />
+              ))}
+            </View>
+          ) : showIndicator ? (
+            <View style={styles.indicator} pointerEvents="none">
+              <Text style={styles.indicatorText}>
+                {index + 1} / {sorted.length}
+              </Text>
+            </View>
+          ) : null}
+
           <Pressable
             style={[styles.zone, styles.zoneLeft]}
             onPress={prev}
@@ -65,13 +85,6 @@ export default function ListingPhotoCarousel({
             onPress={next}
             hitSlop={8}
           />
-          {showIndicator && (
-            <View style={styles.indicator}>
-              <Text style={styles.indicatorText}>
-                {index + 1} / {sorted.length}
-              </Text>
-            </View>
-          )}
         </>
       )}
     </View>
@@ -103,4 +116,22 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   indicatorText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  // Story-style progress bars
+  bars: {
+    position: "absolute",
+    top: 10,
+    left: 12,
+    right: 12,
+    flexDirection: "row",
+    gap: 4,
+  },
+  bar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.4)",
+  },
+  barActive: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+  },
 });

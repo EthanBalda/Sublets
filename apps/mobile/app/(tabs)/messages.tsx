@@ -42,7 +42,7 @@ export default function MessagesScreen() {
     try {
       setConvos(await getMyConversations(profile.id));
     } catch (e: unknown) {
-      console.error("[MessagesTab] load error:", e instanceof Error ? e.message : String(e));
+      if (__DEV__) console.error("[MessagesTab] load error:", e instanceof Error ? e.message : String(e));
       setError("Couldn't load messages.");
     } finally {
       setFetching(false);

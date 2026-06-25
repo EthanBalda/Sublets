@@ -202,12 +202,16 @@ export default function RequestsScreen() {
               </Text>
               <Badge status={item.status} />
             </View>
-            {item.monthly_rent != null && (
-              <Text style={styles.metaText}>${item.monthly_rent}/mo</Text>
-            )}
-            <Text style={styles.metaText}>From: {item.seeker_name ?? "Unknown"}</Text>
+            <View style={styles.cardRow}>
+              {item.monthly_rent != null && (
+                <Text style={styles.rentText}>${item.monthly_rent}/mo</Text>
+              )}
+              <Text style={styles.seekerName}>
+                {item.seeker_name ?? "Unknown seeker"}
+              </Text>
+            </View>
             {item.message ? (
-              <Text style={styles.messagePreview} numberOfLines={2}>
+              <Text style={styles.messagePreview} numberOfLines={1}>
                 {`"${item.message}"`}
               </Text>
             ) : null}
@@ -320,6 +324,9 @@ const styles = StyleSheet.create({
   },
   badge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 12, fontWeight: "600" },
+  cardRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  rentText: { fontSize: 14, fontWeight: "700", color: "#208AEF" },
+  seekerName: { fontSize: 13, color: "#555", flex: 1 },
   metaText: { fontSize: 14, color: "#555" },
   messagePreview: { fontSize: 13, color: "#777", fontStyle: "italic" },
   dateText: { fontSize: 12, color: "#aaa" },

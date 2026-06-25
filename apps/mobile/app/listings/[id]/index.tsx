@@ -155,23 +155,24 @@ export default function ListingDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Photo carousel */}
+        {/* Photo carousel with story-style bar indicators */}
         <ListingPhotoCarousel
           photos={sortedPhotos}
-          height={280}
+          height={300}
           width={SCREEN_WIDTH}
           fallbackLabel="No photos"
+          showBars
         />
 
         {/* Core info */}
         <View style={styles.infoBlock}>
-          <Text style={styles.title}>{listing.title}</Text>
           <Text style={styles.rent}>${listing.monthly_rent}/mo</Text>
+          <Text style={styles.title}>{listing.title}</Text>
           <Text style={styles.meta}>
-            {listing.neighborhood} · {listing.bedrooms} bd · {listing.bathrooms} ba
+            {listing.neighborhood} · {labelFor(HOUSING_TYPES, listing.housing_type)}
           </Text>
-          <Text style={styles.meta}>
-            {labelFor(HOUSING_TYPES, listing.housing_type)}
+          <Text style={styles.meta2}>
+            {listing.bedrooms} bd · {listing.bathrooms} ba
           </Text>
         </View>
 
@@ -295,9 +296,10 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f0f0f0",
     gap: 4,
   },
-  title: { fontSize: 22, fontWeight: "800", color: "#1a1a1a" },
-  rent: { fontSize: 20, fontWeight: "700", color: "#208AEF" },
+  rent: { fontSize: 26, fontWeight: "800", color: "#208AEF" },
+  title: { fontSize: 20, fontWeight: "700", color: "#1a1a1a" },
   meta: { fontSize: 15, color: "#555" },
+  meta2: { fontSize: 14, color: "#888" },
   section: {
     backgroundColor: "#fff",
     paddingHorizontal: 20,

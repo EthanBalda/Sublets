@@ -31,6 +31,15 @@ type ListingWithPhotos = Tables<"listings"> & {
   listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
 };
 
+function fmtDateShort(s: string | null | undefined): string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const [y, mo, d] = s.split("-").map(Number);
+  return new Date(y, mo - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function SwipeCard({
   listing,
   translateX,
@@ -65,6 +74,14 @@ function SwipeCard({
     ],
   }));
 
+  // Overlay labels fade in as the card is dragged in each direction.
+  const requestOverlayStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, Math.max(0, translateX.value / 60)),
+  }));
+  const passOverlayStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, Math.max(0, -translateX.value / 60)),
+  }));
+
   const pan = Gesture.Pan()
     .enabled(!disabled)
     .onUpdate((e) => {
@@ -84,9 +101,29 @@ function SwipeCard({
       }
     });
 
+  const startDate = fmtDateShort(listing.available_start_date);
+  const endDate = fmtDateShort(listing.available_end_date);
+  const dateRange = startDate && endDate ? `${startDate} – ${endDate}` : "";
+
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.card, animatedStyle]}>
+        {/* REQUEST label — fades in when dragging right */}
+        <Animated.View
+          style={[styles.overlayLabel, styles.overlayRequest, requestOverlayStyle]}
+          pointerEvents="none"
+        >
+          <Text style={styles.overlayRequestText}>REQUEST</Text>
+        </Animated.View>
+
+        {/* PASS label — fades in when dragging left */}
+        <Animated.View
+          style={[styles.overlayLabel, styles.overlayPass, passOverlayStyle]}
+          pointerEvents="none"
+        >
+          <Text style={styles.overlayPassText}>PASS</Text>
+        </Animated.View>
+
         {/* Photo with tap-left / tap-right zones */}
         <View style={styles.photoContainer}>
           {photo ? (
@@ -103,41 +140,49 @@ function SwipeCard({
 
           {sortedPhotos.length > 1 && (
             <>
+              {/* Progress bars across the top of the photo */}
+              <View style={styles.photoBars} pointerEvents="none">
+                {sortedPhotos.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[styles.photoBar, i === photoIndex && styles.photoBarActive]}
+                  />
+                ))}
+              </View>
+
               <Pressable
                 style={[styles.tapZone, styles.tapZoneLeft]}
-                onPress={() =>
-                  setPhotoIndex((i) => Math.max(0, i - 1))
-                }
+                onPress={() => setPhotoIndex((i) => Math.max(0, i - 1))}
               />
               <Pressable
                 style={[styles.tapZone, styles.tapZoneRight]}
                 onPress={() =>
-                  setPhotoIndex((i) =>
-                    Math.min(sortedPhotos.length - 1, i + 1)
-                  )
+                  setPhotoIndex((i) => Math.min(sortedPhotos.length - 1, i + 1))
                 }
               />
-              <View style={styles.photoIndicator}>
-                <Text style={styles.photoIndicatorText}>
-                  {photoIndex + 1} / {sortedPhotos.length}
-                </Text>
-              </View>
             </>
           )}
         </View>
 
         {/* Info area — tap to open detail */}
         <Pressable style={styles.cardInfo} onPress={onTapDetail}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
+          <Text style={styles.cardRent}>${listing.monthly_rent}/mo</Text>
+          <Text style={styles.cardTitle} numberOfLines={1}>
             {listing.title}
           </Text>
           <Text style={styles.cardMeta}>
-            ${listing.monthly_rent}/mo · {listing.neighborhood}
+            {listing.neighborhood}
+            {dateRange ? ` · ${dateRange}` : ""}
           </Text>
           <Text style={styles.cardMeta2}>
             {listing.housing_type.replace(/_/g, " ")} · {listing.bedrooms} bd ·{" "}
             {listing.bathrooms} ba
           </Text>
+          {listing.description ? (
+            <Text style={styles.cardDesc} numberOfLines={2}>
+              {listing.description}
+            </Text>
+          ) : null}
           <Text style={styles.viewDetail}>View details →</Text>
         </Pressable>
       </Animated.View>
@@ -161,6 +206,7 @@ export default function FeedScreen() {
   const lastRequestedId = useRef<string | null>(null);
 
   const currentListing = listings[index];
+  const remaining = listings.length - index;
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
@@ -287,6 +333,11 @@ export default function FeedScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Sublets</Text>
+        {!feedError && remaining > 0 && (
+          <Text style={styles.headerCount}>
+            {remaining} {remaining === 1 ? "listing" : "listings"} left
+          </Text>
+        )}
       </View>
 
       <View style={styles.cardArea}>
@@ -360,8 +411,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
+  headerCount: { fontSize: 13, color: "#aaa", fontWeight: "500" },
   cardArea: {
     flex: 1,
     justifyContent: "center",
@@ -370,15 +425,48 @@ const styles = StyleSheet.create({
   },
   card: {
     width: SCREEN_WIDTH - 32,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: "#fff",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    elevation: 6,
     overflow: "hidden",
   },
+  // Swipe overlay badges
+  overlayLabel: {
+    position: "absolute",
+    top: 20,
+    zIndex: 20,
+    borderWidth: 3,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  overlayRequest: {
+    left: 16,
+    borderColor: "#22c55e",
+    transform: [{ rotate: "-12deg" }],
+  },
+  overlayRequestText: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#22c55e",
+    letterSpacing: 1.5,
+  },
+  overlayPass: {
+    right: 16,
+    borderColor: "#94a3b8",
+    transform: [{ rotate: "12deg" }],
+  },
+  overlayPassText: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#94a3b8",
+    letterSpacing: 1.5,
+  },
+  // Photo area
   photoContainer: { position: "relative" },
   photo: { width: "100%", height: 240 },
   photoPlaceholder: {
@@ -387,6 +475,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   photoPlaceholderText: { color: "#aaa", fontSize: 15 },
+  // Story-style photo progress bars
+  photoBars: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    right: 8,
+    flexDirection: "row",
+    gap: 3,
+  },
+  photoBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.4)",
+  },
+  photoBarActive: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+  },
   tapZone: {
     position: "absolute",
     top: 0,
@@ -395,21 +501,25 @@ const styles = StyleSheet.create({
   },
   tapZoneLeft: { left: 0 },
   tapZoneRight: { right: 0 },
-  photoIndicator: {
-    position: "absolute",
-    bottom: 8,
-    alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+  // Card info
+  cardInfo: { padding: 16, gap: 4 },
+  cardRent: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#208AEF",
+    lineHeight: 28,
   },
-  photoIndicatorText: { color: "#fff", fontSize: 12, fontWeight: "600" },
-  cardInfo: { padding: 14, gap: 3 },
-  cardTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a" },
-  cardMeta: { fontSize: 14, color: "#444" },
-  cardMeta2: { fontSize: 13, color: "#777", textTransform: "capitalize" },
-  viewDetail: { fontSize: 12, color: "#208AEF", fontWeight: "600", marginTop: 2 },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: "#1a1a1a" },
+  cardMeta: { fontSize: 13, color: "#555" },
+  cardMeta2: { fontSize: 12, color: "#888", textTransform: "capitalize" },
+  cardDesc: { fontSize: 13, color: "#777", lineHeight: 18, marginTop: 2 },
+  viewDetail: {
+    fontSize: 12,
+    color: "#208AEF",
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  // Action buttons
   actions: {
     flexDirection: "row",
     paddingHorizontal: 32,
@@ -423,20 +533,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 2,
     borderColor: "#ccc",
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
   },
-  passBtnText: { fontSize: 16, fontWeight: "600", color: "#555" },
+  passBtnText: { fontSize: 16, fontWeight: "700", color: "#555" },
   requestBtn: {
     flex: 1,
     backgroundColor: "#208AEF",
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
   },
-  requestBtnText: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  requestBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   btnDisabled: { opacity: 0.5 },
+  // Empty / error states
   empty: { alignItems: "center", gap: 12, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
   emptyText: { fontSize: 15, color: "#666", textAlign: "center" },
