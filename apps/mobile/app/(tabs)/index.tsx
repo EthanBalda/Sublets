@@ -178,6 +178,11 @@ export default function FeedScreen() {
         supabase
           .from("listings")
           .select("*, listing_photos(storage_url, sort_order)")
+          // Global visibility rule: only "published" listings appear. A listing
+          // stays published—and visible to all seekers—until the lister explicitly
+          // marks it filled (status → "filled"). Accepting or declining a request
+          // does NOT change listing.status, so the listing remains in every other
+          // seeker's feed after a request is accepted or declined.
           .eq("status", "published")
           .eq("campus_id", profile.campus_id)
           .neq("owner_id", profile.id)
@@ -186,8 +191,13 @@ export default function FeedScreen() {
         supabase
           .from("interest_requests")
           .select("listing_id")
+          // Per-seeker exclusion only: hide listings THIS seeker has already
+          // interacted with so they don't reappear in the swipe deck. We filter
+          // by seeker_id = profile.id, so another seeker's request never removes
+          // a listing from this feed. All terminal statuses are included so a
+          // declined or cancelled listing doesn't resurface unexpectedly.
           .eq("seeker_id", profile.id)
-          .in("status", ["pending", "accepted"]),
+          .in("status", ["pending", "accepted", "declined", "cancelled", "completed"]),
       ]);
 
       if (listingsRes.error) throw listingsRes.error;
