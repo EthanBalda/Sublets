@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -52,6 +53,7 @@ export default function ListingPhotoCarousel({
         />
       ) : (
         <View style={[styles.placeholder, { width: w, height }]}>
+          <Ionicons name="image-outline" size={44} color="#b8c8e0" />
           <Text style={styles.placeholderText}>{fallbackLabel}</Text>
         </View>
       )}
@@ -93,11 +95,12 @@ export default function ListingPhotoCarousel({
 
 const styles = StyleSheet.create({
   placeholder: {
-    backgroundColor: "#e8ecef",
+    backgroundColor: "#eef2f8",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
   },
-  placeholderText: { color: "#aaa", fontSize: 15 },
+  placeholderText: { color: "#b8c8e0", fontSize: 14, fontWeight: "500" },
   zone: {
     position: "absolute",
     top: 0,

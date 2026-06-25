@@ -15,11 +15,26 @@ import { useAuth } from "@/context/AuthContext";
 import { getListingWithPhotos, type ListingWithPhotos } from "@/lib/listings";
 import { supabase } from "@/lib/supabase";
 import ListingPhotoCarousel from "@/components/ListingPhotoCarousel";
-import { HOUSING_TYPES, UTILITIES_INCLUDED, LEASE_STATUSES, labelFor, LISTING_STATUS_LABEL } from "@sublets/shared/constants";
-import { fmtUnitMeta } from "@/lib/format";
+import {
+  HOUSING_TYPES,
+  UTILITIES_INCLUDED,
+  LEASE_STATUSES,
+  labelFor,
+  LISTING_STATUS_LABEL,
+} from "@sublets/shared/constants";
+import { fmtUnitMeta, fmtDateRange } from "@/lib/format";
 import type { Tables } from "@sublets/shared/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
+  draft: { bg: "#f3f4f6", text: "#374151" },
+  published: { bg: "#d1fae5", text: "#065f46" },
+  paused: { bg: "#fef3c7", text: "#92400e" },
+  filled: { bg: "#dbeafe", text: "#1e40af" },
+  expired: { bg: "#fee2e2", text: "#991b1b" },
+  removed: { bg: "#f3f4f6", text: "#6b7280" },
+};
 
 function fmtDate(s: string | null | undefined): string {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return "—";
@@ -127,8 +142,15 @@ export default function ListingDetailScreen() {
   }
 
   const isOwner = profile?.id === listing.owner_id;
-  const canRequest =
-    !isOwner && listing.status === "published" && !hasRequested;
+  const canRequest = !isOwner && listing.status === "published" && !hasRequested;
+  const sc = STATUS_COLOR[listing.status] ?? STATUS_COLOR.draft;
+  const dateRange = fmtDateRange(listing.available_start_date, listing.available_end_date);
+  const showActionBar = isOwner || canRequest || hasRequested;
+  const hasAmenities =
+    listing.parking_available ||
+    listing.laundry_available ||
+    listing.furnished ||
+    listing.pets_allowed;
 
   const sortedPhotos = listing.listing_photos
     .slice()
@@ -137,14 +159,14 @@ export default function ListingDetailScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* Navigation header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerBack}>
           <Text style={styles.headerBackText}>← Back</Text>
         </Pressable>
         {isOwner && (
-          <View style={[styles.statusBadge, { backgroundColor: "#f3f4f6" }]}>
-            <Text style={[styles.statusBadgeText, { color: "#374151" }]}>
+          <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+            <Text style={[styles.statusBadgeText, { color: sc.text }]}>
               {LISTING_STATUS_LABEL[listing.status]}
             </Text>
           </View>
@@ -153,31 +175,33 @@ export default function ListingDetailScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={{
+          paddingBottom: showActionBar ? 96 : insets.bottom + 32,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Photo carousel with story-style bar indicators */}
+        {/* Hero photo carousel */}
         <ListingPhotoCarousel
           photos={sortedPhotos}
           height={300}
           width={SCREEN_WIDTH}
-          fallbackLabel="No photos"
           showBars
         />
 
-        {/* Core info */}
+        {/* Core info block */}
         <View style={styles.infoBlock}>
           <Text style={styles.rent}>${listing.monthly_rent}/mo</Text>
           <Text style={styles.title}>{listing.title}</Text>
-          <Text style={styles.meta}>
-            {listing.neighborhood} · {labelFor(HOUSING_TYPES, listing.housing_type)}
+          <Text style={styles.metaLine}>
+            {labelFor(HOUSING_TYPES, listing.housing_type)} in {listing.neighborhood}
           </Text>
-          <Text style={styles.meta2}>
+          <Text style={styles.metaLine2}>
             {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
+            {dateRange ? `  ·  ${dateRange}` : ""}
           </Text>
         </View>
 
-        {/* Dates */}
+        {/* Availability */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>
           <Text style={styles.sectionBody}>
@@ -185,82 +209,121 @@ export default function ListingDetailScreen() {
           </Text>
         </View>
 
-        {/* Utilities & lease */}
+        {/* Details: utilities + lease + deposit */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Utilities</Text>
-          <Text style={styles.sectionBody}>
-            {labelFor(UTILITIES_INCLUDED, listing.utilities_included)}
-          </Text>
-          {listing.security_deposit != null && (
-            <Text style={styles.sectionBody}>
-              Security deposit: ${listing.security_deposit}
+          <Text style={styles.sectionLabel}>Details</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Utilities</Text>
+            <Text style={styles.detailValue}>
+              {labelFor(UTILITIES_INCLUDED, listing.utilities_included)}
             </Text>
-          )}
-          <Text style={styles.sectionBody}>
-            Lease: {labelFor(LEASE_STATUSES, listing.lease_status)}
-          </Text>
-        </View>
-
-        {/* Amenities */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Amenities</Text>
-          <View style={styles.chips}>
-            {listing.parking_available && <View style={styles.chip}><Text style={styles.chipText}>Parking</Text></View>}
-            {listing.laundry_available && <View style={styles.chip}><Text style={styles.chipText}>Laundry</Text></View>}
-            {listing.furnished && <View style={styles.chip}><Text style={styles.chipText}>Furnished</Text></View>}
-            {listing.pets_allowed && <View style={styles.chip}><Text style={styles.chipText}>Pets OK</Text></View>}
           </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Lease</Text>
+            <Text style={styles.detailValue}>
+              {labelFor(LEASE_STATUSES, listing.lease_status)}
+            </Text>
+          </View>
+          {listing.security_deposit != null && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Security deposit</Text>
+              <Text style={styles.detailValue}>${listing.security_deposit}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Description */}
-        {listing.description ? (
+        {/* Amenities — only if at least one is set */}
+        {hasAmenities ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>About this space</Text>
-            <Text style={styles.descriptionText}>{listing.description}</Text>
+            <Text style={styles.sectionLabel}>Amenities</Text>
+            <View style={styles.chips}>
+              {listing.parking_available && (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Parking</Text>
+                </View>
+              )}
+              {listing.laundry_available && (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Laundry</Text>
+                </View>
+              )}
+              {listing.furnished && (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Furnished</Text>
+                </View>
+              )}
+              {listing.pets_allowed && (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Pets OK</Text>
+                </View>
+              )}
+            </View>
           </View>
         ) : null}
 
-        {/* Lister info */}
-        {owner && !isOwner && (
+        {/* Description — always shown, fallback when empty */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Description</Text>
+          {listing.description ? (
+            <Text style={styles.descriptionText}>{listing.description}</Text>
+          ) : (
+            <Text style={styles.descriptionEmpty}>No description provided.</Text>
+          )}
+        </View>
+
+        {/* Lister info — seekers only, fallback if profile not available */}
+        {!isOwner && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Listed by</Text>
-            <Text style={styles.ownerName}>{owner.full_name}</Text>
-            {owner.major && owner.graduation_year ? (
-              <Text style={styles.ownerMeta}>
-                {owner.major} · Class of {owner.graduation_year}
-              </Text>
-            ) : null}
+            {owner ? (
+              <>
+                <Text style={styles.ownerName}>{owner.full_name}</Text>
+                {owner.major && owner.graduation_year ? (
+                  <Text style={styles.ownerMeta}>
+                    {owner.major} · Class of {owner.graduation_year}
+                  </Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.ownerFallback}>Posted by a UCSD student</Text>
+            )}
           </View>
         )}
-
-        {/* Actions */}
-        {isOwner ? (
-          <Pressable
-            style={styles.editBtn}
-            onPress={() =>
-              router.push(`/listings/${listing.id}/edit` as Parameters<typeof router.push>[0])
-            }
-          >
-            <Text style={styles.editBtnText}>Edit Listing</Text>
-          </Pressable>
-        ) : canRequest ? (
-          <Pressable
-            style={[styles.requestBtn, requesting && styles.btnDisabled]}
-            onPress={() => void handleRequest()}
-            disabled={requesting}
-          >
-            {requesting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.requestBtnText}>Send Request</Text>
-            )}
-          </Pressable>
-        ) : hasRequested ? (
-          <View style={styles.requestedNote}>
-            <Text style={styles.requestedNoteText}>Request sent</Text>
-          </View>
-        ) : null}
       </ScrollView>
+
+      {/* Sticky action bar — only rendered when there is an action */}
+      {showActionBar && (
+        <View style={[styles.actionBar, { paddingBottom: insets.bottom + 8 }]}>
+          {isOwner ? (
+            <Pressable
+              style={styles.editBtn}
+              onPress={() =>
+                router.push(
+                  `/listings/${listing.id}/edit` as Parameters<typeof router.push>[0]
+                )
+              }
+            >
+              <Text style={styles.editBtnText}>Edit Listing</Text>
+            </Pressable>
+          ) : canRequest ? (
+            <Pressable
+              style={[styles.requestBtn, requesting && styles.btnDisabled]}
+              onPress={() => void handleRequest()}
+              disabled={requesting}
+            >
+              {requesting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.requestBtnText}>Send Request</Text>
+              )}
+            </Pressable>
+          ) : hasRequested ? (
+            <View style={styles.requestedNote}>
+              <Text style={styles.requestedNoteText}>{"✓ Request sent"}</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }
@@ -275,7 +338,6 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   scroll: { flex: 1 },
-  content: { gap: 0 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -297,10 +359,10 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f0f0f0",
     gap: 4,
   },
-  rent: { fontSize: 26, fontWeight: "800", color: "#208AEF" },
-  title: { fontSize: 20, fontWeight: "700", color: "#1a1a1a" },
-  meta: { fontSize: 15, color: "#555" },
-  meta2: { fontSize: 14, color: "#888" },
+  rent: { fontSize: 28, fontWeight: "800", color: "#208AEF" },
+  title: { fontSize: 20, fontWeight: "700", color: "#1a1a1a", marginTop: 2 },
+  metaLine: { fontSize: 15, color: "#555", marginTop: 4 },
+  metaLine2: { fontSize: 13, color: "#888" },
   section: {
     backgroundColor: "#fff",
     paddingHorizontal: 20,
@@ -315,10 +377,25 @@ const styles = StyleSheet.create({
     color: "#888",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   sectionBody: { fontSize: 15, color: "#333" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingVertical: 5,
+  },
+  detailLabel: { fontSize: 14, color: "#666" },
+  detailValue: {
+    fontSize: 14,
+    color: "#1a1a1a",
+    fontWeight: "600",
+    flexShrink: 1,
+    textAlign: "right",
+    marginLeft: 16,
+  },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     backgroundColor: "#f0f4ff",
     borderRadius: 8,
@@ -327,14 +404,27 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 13, color: "#208AEF", fontWeight: "600" },
   descriptionText: { fontSize: 15, color: "#333", lineHeight: 22 },
+  descriptionEmpty: { fontSize: 14, color: "#aaa", fontStyle: "italic" },
   ownerName: { fontSize: 16, fontWeight: "700", color: "#1a1a1a" },
   ownerMeta: { fontSize: 14, color: "#666" },
+  ownerFallback: { fontSize: 14, color: "#888" },
+  actionBar: {
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   requestBtn: {
     backgroundColor: "#208AEF",
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
-    margin: 20,
   },
   requestBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   editBtn: {
@@ -343,7 +433,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
-    margin: 20,
   },
   editBtnText: { color: "#208AEF", fontSize: 16, fontWeight: "700" },
   requestedNote: {
@@ -351,7 +440,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
-    margin: 20,
   },
   requestedNoteText: { color: "#065f46", fontSize: 15, fontWeight: "600" },
   btnDisabled: { opacity: 0.5 },
