@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { getListingWithPhotos, type ListingWithPhotos } from "@/lib/listings";
@@ -55,7 +55,16 @@ export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  function goBack() {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)" as Parameters<typeof router.replace>[0]);
+    }
+  }
 
   const [listing, setListing] = useState<ListingWithPhotos | null>(null);
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
@@ -134,7 +143,7 @@ export default function ListingDetailScreen() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Text style={styles.errorText}>{fetchError ?? "Not found."}</Text>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={goBack}>
           <Text style={styles.backBtnText}>Go back</Text>
         </Pressable>
       </View>
@@ -161,7 +170,7 @@ export default function ListingDetailScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Navigation header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerBack}>
+        <Pressable onPress={goBack} style={styles.headerBack}>
           <Text style={styles.headerBackText}>← Back</Text>
         </Pressable>
         {isOwner && (

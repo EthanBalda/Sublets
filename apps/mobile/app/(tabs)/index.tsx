@@ -23,25 +23,18 @@ import type { SharedValue } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { fmtHousingType, fmtUnitMeta } from "@/lib/format";
+import { fmtHousingType, fmtUnitMeta, fmtDateRange } from "@/lib/format";
+import { labelFor, UTILITIES_INCLUDED } from "@sublets/shared/constants";
 import type { Tables } from "@sublets/shared/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
+const CARD_WIDTH = SCREEN_WIDTH - 32;
+const PHOTO_HEIGHT = 340;
 
 type ListingWithPhotos = Tables<"listings"> & {
   listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
 };
-
-function fmtDateShort(s: string | null | undefined): string {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
-  const [y, mo, d] = s.split("-").map(Number);
-  return new Date(y, mo - 1, d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 
 function SwipeCard({
   listing,
@@ -61,13 +54,14 @@ function SwipeCard({
   onTapDetail: () => void;
 }) {
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
   const sortedPhotos = listing.listing_photos
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((p) => p.storage_url);
-
-  const photo = sortedPhotos[photoIndex] ?? null;
+  const hasPhotos = sortedPhotos.length > 0;
+  const photo = hasPhotos ? sortedPhotos[photoIndex] : null;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -77,7 +71,6 @@ function SwipeCard({
     ],
   }));
 
-  // Overlay labels fade in as the card is dragged in each direction.
   const requestOverlayStyle = useAnimatedStyle(() => ({
     opacity: Math.min(1, Math.max(0, translateX.value / 60)),
   }));
@@ -104,14 +97,21 @@ function SwipeCard({
       }
     });
 
-  const startDate = fmtDateShort(listing.available_start_date);
-  const endDate = fmtDateShort(listing.available_end_date);
-  const dateRange = startDate && endDate ? `${startDate} – ${endDate}` : "";
+  const dateRange = fmtDateRange(
+    listing.available_start_date,
+    listing.available_end_date
+  );
+
+  const amenityChips: string[] = [];
+  if (listing.furnished) amenityChips.push("Furnished");
+  if (listing.parking_available) amenityChips.push("Parking");
+  if (listing.laundry_available) amenityChips.push("Laundry");
+  if (listing.pets_allowed) amenityChips.push("Pets OK");
 
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.card, animatedStyle]}>
-        {/* REQUEST label — fades in when dragging right */}
+        {/* REQUEST overlay */}
         <Animated.View
           style={[styles.overlayLabel, styles.overlayRequest, requestOverlayStyle]}
           pointerEvents="none"
@@ -119,7 +119,7 @@ function SwipeCard({
           <Text style={styles.overlayRequestText}>REQUEST</Text>
         </Animated.View>
 
-        {/* PASS label — fades in when dragging left */}
+        {/* PASS overlay */}
         <Animated.View
           style={[styles.overlayLabel, styles.overlayPass, passOverlayStyle]}
           pointerEvents="none"
@@ -127,7 +127,7 @@ function SwipeCard({
           <Text style={styles.overlayPassText}>PASS</Text>
         </Animated.View>
 
-        {/* Photo with tap-left / tap-right zones */}
+        {/* Photo area */}
         <View style={styles.photoContainer}>
           {photo ? (
             <Image
@@ -142,59 +142,136 @@ function SwipeCard({
             </View>
           )}
 
-          {/* Progress bars always rendered when there are photos */}
+          {/* Story-style progress bars */}
           {sortedPhotos.length > 1 && (
             <View style={styles.photoBars} pointerEvents="none">
               {sortedPhotos.map((_, i) => (
                 <View
                   key={i}
-                  style={[styles.photoBar, i === photoIndex && styles.photoBarActive]}
+                  style={[
+                    styles.photoBar,
+                    i === photoIndex && styles.photoBarActive,
+                  ]}
                 />
               ))}
             </View>
           )}
 
-          {/* Tap zones: narrow edges cycle photos; center opens detail */}
-          <Pressable
-            style={[styles.tapZone, styles.tapZoneLeft]}
-            onPress={() => setPhotoIndex((i) => Math.max(0, i - 1))}
-          />
-          <Pressable
-            style={[styles.tapZone, styles.tapZoneCenter]}
-            onPress={onTapDetail}
-          />
-          <Pressable
-            style={[styles.tapZone, styles.tapZoneRight]}
-            onPress={() =>
-              setPhotoIndex((i) => Math.min(sortedPhotos.length - 1, i + 1))
-            }
-          />
+          {/* Simulated gradient: transparent top → dark bottom */}
+          <View style={styles.gradient} pointerEvents="none">
+            <View style={{ flex: 1 }} />
+            <View style={styles.gradientMid} />
+            <View style={styles.gradientDark} />
+          </View>
+
+          {/* Photo tap zones: left / right cycle photos */}
+          {sortedPhotos.length > 1 && (
+            <>
+              <Pressable
+                style={[styles.tapZone, styles.tapZoneLeft]}
+                onPress={() =>
+                  setPhotoIndex((i) => Math.max(0, i - 1))
+                }
+              />
+              <Pressable
+                style={[styles.tapZone, styles.tapZoneRight]}
+                onPress={() =>
+                  setPhotoIndex((i) =>
+                    Math.min(sortedPhotos.length - 1, i + 1)
+                  )
+                }
+              />
+            </>
+          )}
+
+          {/* Info overlaid on gradient */}
+          <View style={styles.photoInfo} pointerEvents="none">
+            <Text style={styles.overlayRent}>
+              ${listing.monthly_rent}/mo
+            </Text>
+            <View style={styles.overlayMetaRow}>
+              <Text style={styles.overlayMeta}>
+                {fmtUnitMeta(
+                  listing.housing_type,
+                  listing.bedrooms,
+                  listing.bathrooms
+                )}
+              </Text>
+              <Text style={styles.overlayDot}> · </Text>
+              <Text style={styles.overlayMeta}>
+                {fmtHousingType(listing.housing_type, listing.bedrooms)}
+              </Text>
+            </View>
+            <Text style={styles.overlayLocation}>
+              {listing.neighborhood}
+              {dateRange ? `  ·  ${dateRange}` : ""}
+            </Text>
+            {amenityChips.length > 0 && (
+              <View style={styles.overlayChips}>
+                {amenityChips.slice(0, 3).map((chip) => (
+                  <View key={chip} style={styles.overlayChip}>
+                    <Text style={styles.overlayChipText}>{chip}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Info area — tapping opens detail (photo center zone also opens detail) */}
-        <Pressable style={styles.cardInfo} onPress={onTapDetail}>
-          <View style={styles.cardInfoTop}>
-            <Text style={styles.cardRent}>${listing.monthly_rent}/mo</Text>
-            <Text style={styles.cardBeds}>
-              {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
+        {/* Compact strip: expand toggle + view listing */}
+        <View style={styles.cardStrip}>
+          <Pressable
+            style={styles.moreBtn}
+            onPress={() => setExpanded((e) => !e)}
+          >
+            <Text style={styles.moreBtnText}>
+              {expanded ? "Less ˄" : "Details ˅"}
             </Text>
-          </View>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
+          </Pressable>
+          <Pressable style={styles.viewListingBtn} onPress={onTapDetail}>
+            <Text style={styles.viewListingBtnText}>View listing →</Text>
+          </Pressable>
+        </View>
+
+        {/* Expandable details panel */}
+        {expanded && (
+          <View style={styles.expandedPanel}>
+            <Text style={styles.expandedTitle} numberOfLines={2}>
               {listing.title}
             </Text>
-            <Text style={styles.cardChevron}>›</Text>
+            {listing.description ? (
+              <Text style={styles.expandedDesc} numberOfLines={4}>
+                {listing.description}
+              </Text>
+            ) : (
+              <Text style={styles.expandedDescEmpty}>
+                No description provided.
+              </Text>
+            )}
+            <View style={styles.expandedDetails}>
+              {dateRange ? (
+                <View style={styles.expandedRow}>
+                  <Text style={styles.expandedLabel}>Dates</Text>
+                  <Text style={styles.expandedValue}>{dateRange}</Text>
+                </View>
+              ) : null}
+              <View style={styles.expandedRow}>
+                <Text style={styles.expandedLabel}>Utilities</Text>
+                <Text style={styles.expandedValue}>
+                  {labelFor(UTILITIES_INCLUDED, listing.utilities_included)}
+                </Text>
+              </View>
+              {listing.security_deposit != null && (
+                <View style={styles.expandedRow}>
+                  <Text style={styles.expandedLabel}>Deposit</Text>
+                  <Text style={styles.expandedValue}>
+                    ${listing.security_deposit}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <Text style={styles.cardMeta}>
-            {fmtHousingType(listing.housing_type, listing.bedrooms)} in {listing.neighborhood}
-            {dateRange ? `  ·  ${dateRange}` : ""}
-          </Text>
-          {listing.description ? (
-            <Text style={styles.cardDesc} numberOfLines={2}>
-              {listing.description}
-            </Text>
-          ) : null}
-        </Pressable>
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -234,11 +311,9 @@ export default function FeedScreen() {
         supabase
           .from("listings")
           .select("*, listing_photos(storage_url, sort_order)")
-          // Global visibility rule: only "published" listings appear. A listing
-          // stays published—and visible to all seekers—until the lister explicitly
-          // marks it filled (status → "filled"). Accepting or declining a request
-          // does NOT change listing.status, so the listing remains in every other
-          // seeker's feed after a request is accepted or declined.
+          // Only published listings appear. Stays visible to all seekers until
+          // the lister explicitly marks it filled — accepting/declining does not
+          // change listing.status.
           .eq("status", "published")
           .eq("campus_id", profile.campus_id)
           .neq("owner_id", profile.id)
@@ -247,13 +322,15 @@ export default function FeedScreen() {
         supabase
           .from("interest_requests")
           .select("listing_id")
-          // Per-seeker exclusion only: hide listings THIS seeker has already
-          // interacted with so they don't reappear in the swipe deck. We filter
-          // by seeker_id = profile.id, so another seeker's request never removes
-          // a listing from this feed. All terminal statuses are included so a
-          // declined or cancelled listing doesn't resurface unexpectedly.
+          // Per-seeker exclusion: hide listings this seeker already interacted with.
           .eq("seeker_id", profile.id)
-          .in("status", ["pending", "accepted", "declined", "cancelled", "completed"]),
+          .in("status", [
+            "pending",
+            "accepted",
+            "declined",
+            "cancelled",
+            "completed",
+          ]),
       ]);
 
       if (listingsRes.error) throw listingsRes.error;
@@ -358,7 +435,10 @@ export default function FeedScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{"Couldn't load listings"}</Text>
             <Text style={styles.emptyText}>{feedError}</Text>
-            <Pressable style={styles.refreshBtn} onPress={() => void loadListings()}>
+            <Pressable
+              style={styles.refreshBtn}
+              onPress={() => void loadListings()}
+            >
               <Text style={styles.refreshBtnText}>Retry</Text>
             </Pressable>
           </View>
@@ -373,7 +453,9 @@ export default function FeedScreen() {
             onRequest={() => void handleRequest()}
             onTapDetail={() =>
               router.push(
-                `/listings/${currentListing.id}` as Parameters<typeof router.push>[0]
+                `/listings/${currentListing.id}` as Parameters<
+                  typeof router.push
+                >[0]
               )
             }
           />
@@ -383,8 +465,10 @@ export default function FeedScreen() {
             <Text style={styles.emptyText}>
               No more listings right now. Check back later.
             </Text>
-
-            <Pressable style={styles.refreshBtn} onPress={() => void loadListings()}>
+            <Pressable
+              style={styles.refreshBtn}
+              onPress={() => void loadListings()}
+            >
               <Text style={styles.refreshBtnText}>Refresh</Text>
             </Pressable>
           </View>
@@ -429,18 +513,22 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   headerTitle: { fontSize: 22, fontWeight: "800", color: "#1a1a1a" },
-  headerSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
+  headerSub: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginTop: 1,
+  },
   headerCount: { fontSize: 13, color: "#aaa", fontWeight: "500" },
   cardArea: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 48, // asymmetric: shifts card upward from dead center
+    paddingVertical: 12,
   },
   card: {
-    width: SCREEN_WIDTH - 32,
+    width: CARD_WIDTH,
     borderRadius: 20,
     backgroundColor: "#fff",
     shadowColor: "#000",
@@ -483,8 +571,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   // Photo area
-  photoContainer: { position: "relative" },
-  photo: { width: "100%", height: 240 },
+  photoContainer: { height: PHOTO_HEIGHT, position: "relative" },
+  photo: { width: "100%", height: PHOTO_HEIGHT },
   photoPlaceholder: {
     backgroundColor: "#eef2f8",
     justifyContent: "center",
@@ -492,7 +580,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   photoPlaceholderText: { color: "#94a3b8", fontSize: 13, fontWeight: "500" },
-  // Story-style photo progress bars
+  // Progress bars
   photoBars: {
     position: "absolute",
     top: 8,
@@ -507,44 +595,109 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.4)",
   },
-  photoBarActive: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-  },
-  tapZone: {
+  photoBarActive: { backgroundColor: "rgba(255,255,255,0.95)" },
+  // Simulated gradient (3 vertical layers)
+  gradient: {
     position: "absolute",
     top: 0,
+    left: 0,
+    right: 0,
     bottom: 0,
   },
-  tapZoneLeft: { left: 0, width: "20%" },
-  tapZoneCenter: { left: "20%", right: "20%" },
-  tapZoneRight: { right: 0, width: "20%" },
-  // Card info
-  cardInfo: { padding: 14, paddingTop: 12, gap: 3 },
-  cardInfoTop: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
+  gradientMid: { height: 80, backgroundColor: "rgba(0,0,0,0.28)" },
+  gradientDark: { height: 120, backgroundColor: "rgba(0,0,0,0.62)" },
+  // Tap zones — left/right only, for photo cycling
+  tapZone: { position: "absolute", top: 0, bottom: 0 },
+  tapZoneLeft: { left: 0, width: "30%" },
+  tapZoneRight: { right: 0, width: "30%" },
+  // Overlay info
+  photoInfo: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 14,
+    paddingBottom: 12,
+    gap: 3,
   },
-  cardRent: {
-    fontSize: 22,
+  overlayRent: {
+    fontSize: 26,
     fontWeight: "800",
-    color: "#208AEF",
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  cardBeds: { fontSize: 12, color: "#94a3b8", fontWeight: "500" },
-  cardTitleRow: {
+  overlayMetaRow: { flexDirection: "row", alignItems: "center" },
+  overlayMeta: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.92)",
+    fontWeight: "600",
+  },
+  overlayDot: { fontSize: 13, color: "rgba(255,255,255,0.65)" },
+  overlayLocation: { fontSize: 13, color: "rgba(255,255,255,0.85)" },
+  overlayChips: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
+  overlayChip: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  overlayChipText: { fontSize: 11, color: "#fff", fontWeight: "600" },
+  // Compact strip
+  cardStrip: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: "#1a1a1a", flex: 1 },
-  cardChevron: { fontSize: 20, color: "#d1d5db", marginLeft: 6 },
-  cardMeta: { fontSize: 13, color: "#666" },
-  cardDesc: { fontSize: 13, color: "#999", lineHeight: 18, marginTop: 1 },
+  moreBtn: { paddingVertical: 4, paddingHorizontal: 2 },
+  moreBtnText: { fontSize: 13, fontWeight: "700", color: "#555" },
+  viewListingBtn: { paddingVertical: 4, paddingHorizontal: 2 },
+  viewListingBtnText: { fontSize: 13, fontWeight: "600", color: "#208AEF" },
+  // Expanded panel
+  expandedPanel: {
+    padding: 14,
+    paddingTop: 0,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+    paddingBottom: 14,
+  },
+  expandedTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    paddingTop: 10,
+  },
+  expandedDesc: { fontSize: 13, color: "#555", lineHeight: 19 },
+  expandedDescEmpty: { fontSize: 13, color: "#aaa", fontStyle: "italic" },
+  expandedDetails: { gap: 2 },
+  expandedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f8f9fa",
+  },
+  expandedLabel: { fontSize: 12, color: "#888" },
+  expandedValue: {
+    fontSize: 12,
+    color: "#333",
+    fontWeight: "600",
+    textAlign: "right",
+    flex: 1,
+    marginLeft: 8,
+  },
   // Action buttons
   actions: {
     flexDirection: "row",
     paddingHorizontal: 32,
-    paddingVertical: 20,
+    paddingVertical: 16,
     gap: 20,
     backgroundColor: "#fff",
     borderTopWidth: 1,
@@ -555,7 +708,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#ccc",
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: "center",
   },
   passBtnText: { fontSize: 16, fontWeight: "700", color: "#555" },
@@ -563,13 +716,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#208AEF",
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: "center",
   },
   requestBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   btnDisabled: { opacity: 0.5 },
-  // Empty / error states
-  empty: { alignItems: "center", gap: 12, paddingHorizontal: 32 },
+  // Empty / error
+  empty: {
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 32,
+  },
   emptyTitle: { fontSize: 22, fontWeight: "700", color: "#1a1a1a" },
   emptyText: { fontSize: 15, color: "#666", textAlign: "center" },
   refreshBtn: {

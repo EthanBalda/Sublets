@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -79,7 +79,16 @@ export default function RequestDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  function goBack() {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/requests" as Parameters<typeof router.replace>[0]);
+    }
+  }
 
   const [detail, setDetail] = useState<RequestDetail | null>(null);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
@@ -348,7 +357,7 @@ export default function RequestDetailScreen() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Text style={styles.errorText}>{fetchError ?? "Not found."}</Text>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={goBack}>
           <Text style={styles.backBtnText}>Go back</Text>
         </Pressable>
       </View>
@@ -372,8 +381,8 @@ export default function RequestDetailScreen() {
       ]}
     >
       {/* 1. Back */}
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <Text style={styles.backLabel}>← Requests</Text>
+      <Pressable style={styles.backRow} onPress={goBack}>
+        <Text style={styles.backLabel}>← Back</Text>
       </Pressable>
 
       {/* 2. Status badge / date */}

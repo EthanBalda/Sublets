@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { getMessages, markMessagesRead, sendMessage, type ThreadMessage } from "@/lib/messages";
@@ -28,7 +28,16 @@ export default function MessageThreadScreen() {
   const { id: conversationId } = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  function goBack() {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/messages" as Parameters<typeof router.replace>[0]);
+    }
+  }
 
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [listingId, setListingId] = useState<string | null>(null);
@@ -107,8 +116,8 @@ export default function MessageThreadScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
+          <Pressable style={styles.backBtn} onPress={goBack}>
+            <Text style={styles.backText}>← Messages</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Conversation</Text>
           {listingId ? (

@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -49,7 +49,16 @@ const STATUS_BG: Record<InterestRequestStatus, string> = {
 export default function MyRequestsScreen() {
   const { profile } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  function goBack() {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/account" as Parameters<typeof router.replace>[0]);
+    }
+  }
   const [requests, setRequests] = useState<OutgoingRequest[]>([]);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +120,7 @@ export default function MyRequestsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backRow}>
+        <Pressable onPress={goBack} style={styles.backRow}>
           <Text style={styles.backLabel}>← Account</Text>
         </Pressable>
         <Text style={styles.headerTitle}>My Sent Requests</Text>
