@@ -73,8 +73,13 @@ export async function getMyConversations(profileId: string): Promise<Conversatio
   });
 }
 
-// Seeker-only: RLS allows seeker to INSERT conversations.
-export async function getOrCreateConversation(
+// Find an existing conversation or create one for an accepted request.
+// Works for either participant (seeker or lister) — the seeker is allowed by
+// conversations_seeker_insert RLS; the lister is allowed by the
+// conversations_lister_insert policy (migration 0004) which requires an
+// accepted interest_request to exist for this triple.
+// Handles the unique-constraint race condition (23505) by re-fetching.
+export async function getOrCreateConversationForAcceptedRequest(
   listingId: string,
   seekerId: string,
   listerId: string
@@ -96,7 +101,7 @@ export async function getOrCreateConversation(
     .single();
 
   if (error) {
-    // Race: unique violation — another insert won; re-fetch.
+    // Race: unique violation — another insert won first; re-fetch.
     if (error.code === "23505" || /duplicate/i.test(error.message)) {
       const { data: found } = await supabase
         .from("conversations")
@@ -111,22 +116,6 @@ export async function getOrCreateConversation(
   }
 
   return created.id;
-}
-
-// Lister-only path: find existing conversation (listers cannot create).
-export async function findConversation(
-  listingId: string,
-  seekerId: string,
-  listerId: string
-): Promise<string | null> {
-  const { data } = await supabase
-    .from("conversations")
-    .select("id")
-    .eq("listing_id", listingId)
-    .eq("seeker_id", seekerId)
-    .eq("lister_id", listerId)
-    .maybeSingle();
-  return data?.id ?? null;
 }
 
 export async function getMessages(conversationId: string): Promise<ThreadMessage[]> {

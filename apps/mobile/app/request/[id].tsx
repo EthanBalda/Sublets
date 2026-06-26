@@ -12,10 +12,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { getOrCreateConversation, findConversation } from "@/lib/messages";
+import { getOrCreateConversationForAcceptedRequest } from "@/lib/messages";
 import type { InterestRequestStatus, Tables } from "@sublets/shared/types";
 
-// Mirror of web's DEFAULT_CHECKLIST_ITEMS — inserted on accept.
 const DEFAULT_CHECKLIST_ITEMS = [
   { key: "confirm_dates", label: "Confirm dates" },
   { key: "confirm_rent", label: "Confirm rent" },
@@ -28,6 +27,14 @@ const DEFAULT_CHECKLIST_ITEMS = [
   },
   { key: "confirm_move_plan", label: "Confirm move-in/move-out plan" },
 ] as const;
+
+type ChecklistItem = {
+  id: string;
+  key: string;
+  label: string;
+  completed_by_seeker: boolean;
+  completed_by_lister: boolean;
+};
 
 type RequestDetail = {
   id: string;
@@ -75,10 +82,14 @@ export default function RequestDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const [detail, setDetail] = useState<RequestDetail | null>(null);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [checklistError, setChecklistError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [messaging, setMessaging] = useState(false);
+  const [togglingItem, setTogglingItem] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!id || !profile) return;
@@ -99,7 +110,6 @@ export default function RequestDetailScreen() {
       return;
     }
 
-    // Must be a participant.
     if (req.seeker_id !== profile.id && req.lister_id !== profile.id) {
       setFetchError("You don't have access to this request.");
       setFetching(false);
@@ -131,6 +141,25 @@ export default function RequestDetailScreen() {
       listing: listing ?? null,
       seeker: seekerProfile,
     });
+
+    // Fetch checklist for accepted/completed requests.
+    if (req.status === "accepted" || req.status === "completed") {
+      const { data: items, error: itemsErr } = await supabase
+        .from("sublet_checklist_items")
+        .select("id, key, label, completed_by_seeker, completed_by_lister")
+        .eq("interest_request_id", req.id)
+        .order("created_at", { ascending: true });
+      if (itemsErr) {
+        setChecklistError("Couldn't load checklist.");
+      } else {
+        setChecklistItems(items ?? []);
+        setChecklistError(null);
+      }
+    } else {
+      setChecklistItems([]);
+      setChecklistError(null);
+    }
+
     setFetching(false);
   }, [id, profile]);
 
@@ -173,7 +202,6 @@ export default function RequestDetailScreen() {
         .from("sublet_checklist_items")
         .insert(toInsert);
       if (checklistErr) {
-        // Accept succeeded — checklist failure is non-fatal, just warn.
         Alert.alert(
           "Accepted",
           "Request accepted, but checklist setup failed. It can be retried."
@@ -182,7 +210,6 @@ export default function RequestDetailScreen() {
     }
 
     setSubmitting(false);
-    // Reload to reflect new status.
     await load();
   }
 
@@ -200,18 +227,15 @@ export default function RequestDetailScreen() {
           style: "destructive",
           onPress: async () => {
             setSubmitting(true);
-
             const { error } = await supabase
               .from("interest_requests")
               .update({ status: "declined" })
               .eq("id", detail.id);
-
             if (error) {
               Alert.alert("Error", "Couldn't decline the request. Try again.");
               setSubmitting(false);
               return;
             }
-
             setSubmitting(false);
             await load();
           },
@@ -220,44 +244,96 @@ export default function RequestDetailScreen() {
     );
   }
 
+  // Either participant can open/create the conversation once the request is
+  // accepted. getOrCreateConversationForAcceptedRequest handles both roles.
   async function handleMessage() {
     if (!detail || !profile || messaging) return;
     setMessaging(true);
-
     try {
-      const isSeeker = detail.seeker_id === profile.id;
-      let convId: string | null;
-
-      if (isSeeker) {
-        // Seeker can create the conversation if it doesn't exist.
-        convId = await getOrCreateConversation(
-          detail.listing_id,
-          profile.id,
-          detail.lister_id
-        );
-      } else {
-        // Lister can only read; seeker must initiate.
-        convId = await findConversation(
-          detail.listing_id,
-          detail.seeker_id,
-          profile.id
-        );
-        if (!convId) {
-          Alert.alert(
-            "No conversation yet",
-            "The seeker hasn't started a conversation. Ask them to tap Message on the request."
-          );
-          setMessaging(false);
-          return;
-        }
-      }
-
+      const convId = await getOrCreateConversationForAcceptedRequest(
+        detail.listing_id,
+        detail.seeker_id,
+        detail.lister_id
+      );
       router.push(`/message/${convId}`);
     } catch (e: unknown) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Couldn't open messages.");
+      Alert.alert(
+        "Error",
+        e instanceof Error ? e.message : "Couldn't open messages."
+      );
     } finally {
       setMessaging(false);
     }
+  }
+
+  async function handleToggleItem(item: ChecklistItem) {
+    if (!profile || !detail || togglingItem) return;
+    if (detail.status !== "accepted") return;
+
+    const isSeeker = detail.seeker_id === profile.id;
+    const patch = isSeeker
+      ? { completed_by_seeker: !item.completed_by_seeker }
+      : { completed_by_lister: !item.completed_by_lister };
+
+    // Optimistic update.
+    setChecklistItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, ...patch } : i))
+    );
+    setTogglingItem(item.id);
+
+    const { error } = await supabase
+      .from("sublet_checklist_items")
+      .update(patch)
+      .eq("id", item.id);
+
+    if (error) {
+      // Roll back.
+      setChecklistItems((prev) =>
+        prev.map((i) => (i.id === item.id ? item : i))
+      );
+      Alert.alert("Error", "Couldn't update checklist. Try again.");
+    }
+
+    setTogglingItem(null);
+  }
+
+  async function handleCompleteRequest() {
+    if (!detail || !profile || completing) return;
+    if (detail.lister_id !== profile.id) return;
+
+    Alert.alert(
+      "Mark as completed?",
+      "This records the sublet as done and marks the listing as filled. It can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark Completed",
+          onPress: async () => {
+            setCompleting(true);
+            const now = new Date().toISOString();
+
+            const { error: reqErr } = await supabase
+              .from("interest_requests")
+              .update({ status: "completed", completed_at: now })
+              .eq("id", detail.id);
+
+            if (reqErr) {
+              Alert.alert("Error", reqErr.message);
+              setCompleting(false);
+              return;
+            }
+
+            await supabase
+              .from("listings")
+              .update({ status: "filled", filled_at: now })
+              .eq("id", detail.listing_id);
+
+            setCompleting(false);
+            await load();
+          },
+        },
+      ]
+    );
   }
 
   if (fetching) {
@@ -282,6 +358,10 @@ export default function RequestDetailScreen() {
   const isLister = detail.lister_id === profile?.id;
   const isPending = detail.status === "pending";
   const isAccepted = detail.status === "accepted";
+  const showChecklist = isAccepted || detail.status === "completed";
+  const allItemsDone =
+    checklistItems.length > 0 &&
+    checklistItems.every((i) => i.completed_by_seeker && i.completed_by_lister);
 
   return (
     <ScrollView
@@ -291,12 +371,12 @@ export default function RequestDetailScreen() {
         { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 },
       ]}
     >
-      {/* Back */}
+      {/* 1. Back */}
       <Pressable style={styles.backRow} onPress={() => router.back()}>
         <Text style={styles.backLabel}>← Requests</Text>
       </Pressable>
 
-      {/* Status */}
+      {/* 2. Status badge / date */}
       <View style={styles.statusRow}>
         <View
           style={[styles.badge, { backgroundColor: STATUS_BG[detail.status] }]}
@@ -312,7 +392,7 @@ export default function RequestDetailScreen() {
         </Text>
       </View>
 
-      {/* Listing */}
+      {/* 3. Listing card */}
       {detail.listing && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Listing</Text>
@@ -335,7 +415,7 @@ export default function RequestDetailScreen() {
         </View>
       )}
 
-      {/* Seeker profile — shown to lister */}
+      {/* 4. Other participant profile (seeker info shown to lister) */}
       {isLister && detail.seeker && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>From</Text>
@@ -349,7 +429,7 @@ export default function RequestDetailScreen() {
         </View>
       )}
 
-      {/* Message */}
+      {/* Request message */}
       {detail.message ? (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Message</Text>
@@ -357,7 +437,7 @@ export default function RequestDetailScreen() {
         </View>
       ) : null}
 
-      {/* Seeker status note */}
+      {/* Seeker status note (pending / declined / cancelled) */}
       {!isLister && !isAccepted && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Status</Text>
@@ -371,41 +451,7 @@ export default function RequestDetailScreen() {
         </View>
       )}
 
-      {/* Lister: Accept / Decline (pending only) */}
-      {isLister && isPending && (
-        <View style={styles.actions}>
-          <Pressable
-            style={[styles.acceptBtn, submitting && styles.btnDisabled]}
-            onPress={handleAccept}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.acceptBtnText}>Accept</Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            style={[styles.declineBtn, submitting && styles.btnDisabled]}
-            onPress={handleDecline}
-            disabled={submitting}
-          >
-            <Text style={styles.declineBtnText}>Decline</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* Resolved state note for lister (non-pending) */}
-      {isLister && !isPending && !isAccepted && (
-        <View style={styles.resolvedNote}>
-          <Text style={styles.resolvedNoteText}>
-            This request is {STATUS_LABEL[detail.status].toLowerCase()}.
-          </Text>
-        </View>
-      )}
-
-      {/* Message button — both parties when accepted */}
+      {/* 5. Message button — both parties when accepted */}
       {isAccepted && (
         <Pressable
           style={[styles.messageBtn, messaging && styles.btnDisabled]}
@@ -418,6 +464,151 @@ export default function RequestDetailScreen() {
             <Text style={styles.messageBtnText}>Message</Text>
           )}
         </Pressable>
+      )}
+
+      {/* 6. Checklist — shown when accepted or completed */}
+      {showChecklist && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Checklist</Text>
+          {checklistError ? (
+            <Text style={styles.checklistErrorText}>{checklistError}</Text>
+          ) : checklistItems.length === 0 ? (
+            <Text style={styles.checklistEmpty}>
+              {isLister
+                ? "Checklist not ready. Try accepting again."
+                : "Checklist is being set up by the lister."}
+            </Text>
+          ) : (
+            <>
+              {checklistItems.map((item) => {
+                const myDone = isLister
+                  ? item.completed_by_lister
+                  : item.completed_by_seeker;
+                const theirDone = isLister
+                  ? item.completed_by_seeker
+                  : item.completed_by_lister;
+                const isToggling = togglingItem === item.id;
+                const canToggle = isAccepted && !togglingItem;
+
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[
+                      styles.checklistRow,
+                      isToggling && styles.checklistRowToggling,
+                    ]}
+                    onPress={() => canToggle && void handleToggleItem(item)}
+                    disabled={!canToggle}
+                  >
+                    {/* My checkbox */}
+                    <View
+                      style={[
+                        styles.checkbox,
+                        myDone && styles.checkboxDone,
+                        !isAccepted && styles.checkboxReadOnly,
+                      ]}
+                    >
+                      {myDone && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.checklistLabel,
+                        myDone && styles.checklistLabelDone,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {item.label}
+                    </Text>
+
+                    {/* Their side indicator */}
+                    <View
+                      style={[
+                        styles.theirIndicator,
+                        theirDone && styles.theirIndicatorDone,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.theirLabel,
+                          theirDone && styles.theirLabelDone,
+                        ]}
+                      >
+                        {theirDone ? "✓" : "·"}{" "}
+                        {isLister ? "seeker" : "lister"}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+
+              <Text style={styles.checklistHint}>
+                Tap an item to mark your side complete.
+              </Text>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Mark Completed — lister only, accepted, all items done by both */}
+      {isLister && isAccepted && checklistItems.length > 0 && (
+        <Pressable
+          style={[
+            styles.completeBtn,
+            (!allItemsDone || completing) && styles.btnDisabled,
+          ]}
+          onPress={() => void handleCompleteRequest()}
+          disabled={!allItemsDone || completing}
+        >
+          {completing ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Text style={styles.completeBtnText}>Mark Completed</Text>
+              {!allItemsDone && (
+                <Text style={styles.completeBtnHint}>
+                  Both sides must finish all checklist items first.
+                </Text>
+              )}
+            </>
+          )}
+        </Pressable>
+      )}
+
+      {/* 7. Accept / Decline — lister, pending */}
+      {isLister && isPending && (
+        <View style={styles.actions}>
+          <Pressable
+            style={[styles.acceptBtn, submitting && styles.btnDisabled]}
+            onPress={() => void handleAccept()}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.acceptBtnText}>Accept</Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={[styles.declineBtn, submitting && styles.btnDisabled]}
+            onPress={() => void handleDecline()}
+            disabled={submitting}
+          >
+            <Text style={styles.declineBtnText}>Decline</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Resolved state note for lister (non-pending, non-accepted) */}
+      {isLister && !isPending && !isAccepted && (
+        <View style={styles.resolvedNote}>
+          <Text style={styles.resolvedNoteText}>
+            This request is {STATUS_LABEL[detail.status].toLowerCase()}.
+          </Text>
+        </View>
       )}
     </ScrollView>
   );
@@ -475,6 +666,56 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   statusNote: { fontSize: 14, color: "#555" },
+  // Checklist
+  checklistErrorText: { fontSize: 14, color: "#dc2626" },
+  checklistEmpty: { fontSize: 14, color: "#aaa", fontStyle: "italic" },
+  checklistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  checklistRowToggling: { opacity: 0.5 },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#d1d5db",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  checkboxDone: {
+    backgroundColor: "#10b981",
+    borderColor: "#10b981",
+  },
+  checkboxReadOnly: {
+    borderColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
+  },
+  checkmark: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  checklistLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: "#1a1a1a",
+    lineHeight: 19,
+  },
+  checklistLabelDone: { color: "#9ca3af", textDecorationLine: "line-through" },
+  theirIndicator: {
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "#f3f4f6",
+    flexShrink: 0,
+  },
+  theirIndicatorDone: { backgroundColor: "#d1fae5" },
+  theirLabel: { fontSize: 11, color: "#9ca3af", fontWeight: "500" },
+  theirLabelDone: { color: "#065f46" },
+  checklistHint: { fontSize: 12, color: "#aaa", marginTop: 8 },
+  // Buttons
   actions: { gap: 12, marginTop: 8 },
   acceptBtn: {
     backgroundColor: "#208AEF",
@@ -507,6 +748,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   messageBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  completeBtn: {
+    backgroundColor: "#1d4ed8",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    gap: 4,
+  },
+  completeBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  completeBtnHint: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
   errorText: { fontSize: 15, color: "#dc2626", textAlign: "center" },
   backBtn: {
     backgroundColor: "#208AEF",
