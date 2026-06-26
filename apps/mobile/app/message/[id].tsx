@@ -14,7 +14,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
-import { getMessages, sendMessage, type ThreadMessage } from "@/lib/messages";
+import { getMessages, markMessagesRead, sendMessage, type ThreadMessage } from "@/lib/messages";
 import { supabase } from "@/lib/supabase";
 
 function formatTime(iso: string): string {
@@ -39,7 +39,7 @@ export default function MessageThreadScreen() {
   const flatListRef = useRef<FlatList<ThreadMessage>>(null);
 
   const load = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId || !profile) return;
     try {
       const [msgs, convoRes] = await Promise.all([
         getMessages(conversationId),
@@ -51,12 +51,14 @@ export default function MessageThreadScreen() {
       ]);
       setMessages(msgs);
       setListingId(convoRes.data?.listing_id ?? null);
+      // Mark incoming messages as read (best-effort, silent).
+      void markMessagesRead(conversationId, profile.id).catch(() => {});
     } catch {
       // Silently retry on focus.
     } finally {
       setFetching(false);
     }
-  }, [conversationId]);
+  }, [conversationId, profile]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 

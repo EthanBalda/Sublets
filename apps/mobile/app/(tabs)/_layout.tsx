@@ -1,7 +1,66 @@
+import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
+
+function useTabBadges(profileId: string | null | undefined) {
+  const [requestsBadge, setRequestsBadge] = useState(0);
+  const [messagesBadge, setMessagesBadge] = useState(0);
+
+  useEffect(() => {
+    if (!profileId) return;
+    const id: string = profileId;
+
+    async function refresh() {
+      try {
+        const [pendingInRes, acceptedOutRes] = await Promise.all([
+          supabase
+            .from("interest_requests")
+            .select("id", { count: "exact", head: true })
+            .eq("lister_id", id)
+            .eq("status", "pending"),
+          supabase
+            .from("interest_requests")
+            .select("id", { count: "exact", head: true })
+            .eq("seeker_id", id)
+            .eq("status", "accepted"),
+        ]);
+        setRequestsBadge((pendingInRes.count ?? 0) + (acceptedOutRes.count ?? 0));
+
+        const { data: convos } = await supabase
+          .from("conversations")
+          .select("id")
+          .or(`seeker_id.eq.${id},lister_id.eq.${id}`);
+
+        if (convos && convos.length > 0) {
+          const { count } = await supabase
+            .from("messages")
+            .select("id", { count: "exact", head: true })
+            .in("conversation_id", convos.map((c) => c.id))
+            .neq("sender_id", id)
+            .is("read_at", null);
+          setMessagesBadge(count ?? 0);
+        } else {
+          setMessagesBadge(0);
+        }
+      } catch (e) {
+        if (__DEV__) console.warn("[TabBadges] refresh error:", e);
+      }
+    }
+
+    void refresh();
+    const timer = setInterval(() => void refresh(), 30_000);
+    return () => clearInterval(timer);
+  }, [profileId]);
+
+  return { requestsBadge, messagesBadge };
+}
 
 export default function TabsLayout() {
+  const { profile } = useAuth();
+  const { requestsBadge, messagesBadge } = useTabBadges(profile?.id);
+
   return (
     <Tabs
       screenOptions={{
@@ -37,6 +96,7 @@ export default function TabsLayout() {
         name="requests"
         options={{
           title: "Requests",
+          tabBarBadge: requestsBadge > 0 ? requestsBadge : undefined,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "file-tray" : "file-tray-outline"}
@@ -50,6 +110,7 @@ export default function TabsLayout() {
         name="messages"
         options={{
           title: "Messages",
+          tabBarBadge: messagesBadge > 0 ? messagesBadge : undefined,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={

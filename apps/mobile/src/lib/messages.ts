@@ -118,6 +118,18 @@ export async function getOrCreateConversationForAcceptedRequest(
   return created.id;
 }
 
+export async function markMessagesRead(
+  conversationId: string,
+  myProfileId: string
+): Promise<void> {
+  await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .neq("sender_id", myProfileId)
+    .is("read_at", null);
+}
+
 export async function getMessages(conversationId: string): Promise<ThreadMessage[]> {
   const { data, error } = await supabase
     .from("messages")

@@ -42,6 +42,22 @@ const STATUS_LABEL: Record<InterestRequestStatus, string> = {
   completed: "Completed",
 };
 
+const STATUS_GROUP_ORDER: InterestRequestStatus[] = [
+  "pending",
+  "accepted",
+  "completed",
+  "declined",
+  "cancelled",
+];
+
+function groupByStatus<T extends { status: InterestRequestStatus }>(
+  items: T[]
+): { status: InterestRequestStatus; items: T[] }[] {
+  return STATUS_GROUP_ORDER
+    .map((s) => ({ status: s, items: items.filter((i) => i.status === s) }))
+    .filter((g) => g.items.length > 0);
+}
+
 const STATUS_COLOR: Record<InterestRequestStatus, string> = {
   pending: "#b45309",
   accepted: "#065f46",
@@ -190,35 +206,40 @@ export default function RequestsScreen() {
           <Text style={styles.emptyText}>No incoming requests yet.</Text>
         </View>
       ) : (
-        incoming.map((item) => (
-          <Pressable
-            key={item.id}
-            style={styles.card}
-            onPress={() => router.push(`/request/${item.id}`)}
-          >
-            <View style={styles.cardTop}>
-              <Text style={styles.listingTitle} numberOfLines={1}>
-                {item.listing_title ?? "Listing"}
-              </Text>
-              <Badge status={item.status} />
-            </View>
-            <View style={styles.cardRow}>
-              {item.monthly_rent != null && (
-                <Text style={styles.rentText}>${item.monthly_rent}/mo</Text>
-              )}
-              <Text style={styles.seekerName}>
-                {item.seeker_name ?? "Unknown seeker"}
-              </Text>
-            </View>
-            {item.message ? (
-              <Text style={styles.messagePreview} numberOfLines={1}>
-                {`"${item.message}"`}
-              </Text>
-            ) : null}
-            <Text style={styles.dateText}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-          </Pressable>
+        groupByStatus(incoming).map((group) => (
+          <View key={group.status}>
+            <Text style={styles.statusGroupLabel}>{STATUS_LABEL[group.status]}</Text>
+            {group.items.map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.card}
+                onPress={() => router.push(`/request/${item.id}`)}
+              >
+                <View style={styles.cardTop}>
+                  <Text style={styles.listingTitle} numberOfLines={1}>
+                    {item.listing_title ?? "Listing"}
+                  </Text>
+                  <Badge status={item.status} />
+                </View>
+                <View style={styles.cardRow}>
+                  {item.monthly_rent != null && (
+                    <Text style={styles.rentText}>${item.monthly_rent}/mo</Text>
+                  )}
+                  <Text style={styles.seekerName}>
+                    {item.seeker_name ?? "Unknown seeker"}
+                  </Text>
+                </View>
+                {item.message ? (
+                  <Text style={styles.messagePreview} numberOfLines={1}>
+                    {`"${item.message}"`}
+                  </Text>
+                ) : null}
+                <Text style={styles.dateText}>
+                  {new Date(item.created_at).toLocaleDateString()}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         ))
       )}
 
@@ -238,25 +259,30 @@ export default function RequestsScreen() {
           </Text>
         </View>
       ) : (
-        outgoing.map((item) => (
-          <Pressable
-            key={item.id}
-            style={styles.card}
-            onPress={() => router.push(`/request/${item.id}`)}
-          >
-            <View style={styles.cardTop}>
-              <Text style={styles.listingTitle} numberOfLines={1}>
-                {item.listing_title ?? "Listing"}
-              </Text>
-              <Badge status={item.status} />
-            </View>
-            {item.monthly_rent != null && (
-              <Text style={styles.metaText}>${item.monthly_rent}/mo</Text>
-            )}
-            <Text style={styles.dateText}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-          </Pressable>
+        groupByStatus(outgoing).map((group) => (
+          <View key={group.status}>
+            <Text style={styles.statusGroupLabel}>{STATUS_LABEL[group.status]}</Text>
+            {group.items.map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.card}
+                onPress={() => router.push(`/request/${item.id}`)}
+              >
+                <View style={styles.cardTop}>
+                  <Text style={styles.listingTitle} numberOfLines={1}>
+                    {item.listing_title ?? "Listing"}
+                  </Text>
+                  <Badge status={item.status} />
+                </View>
+                {item.monthly_rent != null && (
+                  <Text style={styles.metaText}>${item.monthly_rent}/mo</Text>
+                )}
+                <Text style={styles.dateText}>
+                  {new Date(item.created_at).toLocaleDateString()}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         ))
       )}
 
@@ -330,6 +356,16 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 14, color: "#555" },
   messagePreview: { fontSize: 13, color: "#777", fontStyle: "italic" },
   dateText: { fontSize: 12, color: "#aaa" },
+  statusGroupLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
   errorText: { fontSize: 15, color: "#dc2626", textAlign: "center" },
   retryBtn: {
     backgroundColor: "#208AEF",
