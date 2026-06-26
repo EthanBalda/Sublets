@@ -213,7 +213,7 @@ export default function RequestsScreen() {
               <Pressable
                 key={item.id}
                 style={styles.card}
-                onPress={() => router.push(`/request/${item.id}`)}
+                onPress={() => router.push(`/request/${item.id}?returnTo=/(tabs)/requests` as Parameters<typeof router.push>[0])}
               >
                 <View style={styles.cardTop}>
                   <Text style={styles.listingTitle} numberOfLines={1}>
@@ -266,7 +266,7 @@ export default function RequestsScreen() {
               <Pressable
                 key={item.id}
                 style={styles.card}
-                onPress={() => router.push(`/request/${item.id}`)}
+                onPress={() => router.push(`/request/${item.id}?returnTo=/(tabs)/requests` as Parameters<typeof router.push>[0])}
               >
                 <View style={styles.cardTop}>
                   <Text style={styles.listingTitle} numberOfLines={1}>

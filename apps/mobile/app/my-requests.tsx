@@ -7,7 +7,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { navigateBack } from "@/lib/navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -47,17 +48,19 @@ const STATUS_BG: Record<InterestRequestStatus, string> = {
 };
 
 export default function MyRequestsScreen() {
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const { profile } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   function goBack() {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/(tabs)/account" as Parameters<typeof router.replace>[0]);
-    }
+    navigateBack(
+      router,
+      navigation,
+      returnTo,
+      "/(tabs)/account" as Parameters<typeof router.replace>[0]
+    );
   }
   const [requests, setRequests] = useState<OutgoingRequest[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -149,7 +152,7 @@ export default function MyRequestsScreen() {
           renderItem={({ item }) => (
             <Pressable
               style={styles.card}
-              onPress={() => router.push(`/request/${item.id}`)}
+              onPress={() => router.push(`/request/${item.id}?returnTo=/my-requests` as Parameters<typeof router.push>[0])}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.listingTitle} numberOfLines={1}>

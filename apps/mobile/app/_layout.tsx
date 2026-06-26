@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
@@ -93,7 +93,7 @@ function AuthGate() {
     );
   }
 
-  return <Slot />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 export default function RootLayout() {

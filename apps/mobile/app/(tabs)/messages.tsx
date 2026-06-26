@@ -87,7 +87,7 @@ export default function MessagesScreen() {
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
-              onPress={() => router.push(`/message/${item.id}`)}
+              onPress={() => router.push(`/message/${item.id}?returnTo=/(tabs)/messages` as Parameters<typeof router.push>[0])}
             >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>

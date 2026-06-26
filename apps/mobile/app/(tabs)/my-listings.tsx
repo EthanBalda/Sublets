@@ -144,7 +144,7 @@ export default function MyListingsScreen() {
               listing={item}
               onPress={() =>
                 router.push(
-                  `/listings/${item.id}` as Parameters<typeof router.push>[0]
+                  `/listings/${item.id}?returnTo=/(tabs)/my-listings` as Parameters<typeof router.push>[0]
                 )
               }
               onEdit={() =>

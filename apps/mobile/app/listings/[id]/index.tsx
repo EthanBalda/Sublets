@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { navigateBack } from "@/lib/navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { getListingWithPhotos, type ListingWithPhotos } from "@/lib/listings";
@@ -52,18 +53,19 @@ type OwnerProfile = Pick<
 >;
 
 export default function ListingDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
   const { profile } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   function goBack() {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/(tabs)" as Parameters<typeof router.replace>[0]);
-    }
+    navigateBack(
+      router,
+      navigation,
+      returnTo,
+      "/(tabs)" as Parameters<typeof router.replace>[0]
+    );
   }
 
   const [listing, setListing] = useState<ListingWithPhotos | null>(null);

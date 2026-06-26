@@ -76,7 +76,7 @@ export default function AccountScreen() {
 
       <Pressable
         style={styles.outgoingBtn}
-        onPress={() => router.push("/my-requests")}
+        onPress={() => router.push("/my-requests?returnTo=/(tabs)/account" as Parameters<typeof router.push>[0])}
       >
         <Text style={styles.outgoingBtnText}>My Sent Requests →</Text>
       </Pressable>

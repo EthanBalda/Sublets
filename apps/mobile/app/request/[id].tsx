@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { navigateBack } from "@/lib/navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -76,18 +77,19 @@ const STATUS_BG: Record<InterestRequestStatus, string> = {
 };
 
 export default function RequestDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
   const { profile } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   function goBack() {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/(tabs)/requests" as Parameters<typeof router.replace>[0]);
-    }
+    navigateBack(
+      router,
+      navigation,
+      returnTo,
+      "/(tabs)/requests" as Parameters<typeof router.replace>[0]
+    );
   }
 
   const [detail, setDetail] = useState<RequestDetail | null>(null);
@@ -415,7 +417,7 @@ export default function RequestDetailScreen() {
           <Pressable
             onPress={() =>
               router.push(
-                `/listings/${detail.listing_id}` as Parameters<typeof router.push>[0]
+                `/listings/${detail.listing_id}?returnTo=/request/${detail.id}` as Parameters<typeof router.push>[0]
               )
             }
           >
