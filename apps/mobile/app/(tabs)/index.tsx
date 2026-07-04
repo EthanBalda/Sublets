@@ -24,11 +24,26 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { fmtHousingType, fmtUnitMeta, fmtDateRange } from "@/lib/format";
-import { labelFor, UTILITIES_INCLUDED } from "@sublets/shared/constants";
 import type { Tables } from "@sublets/shared/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
+
+// Multi-step gradient approximation: transparent at top, dark at bottom.
+// Using 9 thin equal-height steps in the bottom 55% of the card so transitions
+// are small enough to read as a smooth fade without LinearGradient.
+const GRAD_TOP_FLEX = 5;
+const GRAD_STEPS: { opacity: number }[] = [
+  { opacity: 0.04 },
+  { opacity: 0.11 },
+  { opacity: 0.21 },
+  { opacity: 0.33 },
+  { opacity: 0.47 },
+  { opacity: 0.60 },
+  { opacity: 0.71 },
+  { opacity: 0.79 },
+  { opacity: 0.84 },
+];
 
 type ListingWithPhotos = Tables<"listings"> & {
   listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
@@ -52,7 +67,6 @@ function SwipeCard({
   onTapDetail: () => void;
 }) {
   const [photoIndex, setPhotoIndex] = useState(0);
-  const [expanded, setExpanded] = useState(false);
 
   const sortedPhotos = listing.listing_photos
     .slice()
@@ -109,13 +123,10 @@ function SwipeCard({
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.card, animatedStyle]}>
-        {/* ── absolute layer: photo fills card ── */}
+
+        {/* absolute: photo fills card */}
         {photo ? (
-          <Image
-            source={{ uri: photo }}
-            style={styles.fill}
-            contentFit="cover"
-          />
+          <Image source={{ uri: photo }} style={styles.fill} contentFit="cover" />
         ) : (
           <View style={[styles.fill, styles.photoPlaceholder]}>
             <Ionicons name="home-outline" size={52} color="rgba(255,255,255,0.25)" />
@@ -123,14 +134,18 @@ function SwipeCard({
           </View>
         )}
 
-        {/* ── absolute layer: gradient — bottom half only ── */}
+        {/* absolute: smooth bottom gradient — transparent top, dark bottom */}
         <View style={styles.gradient} pointerEvents="none">
-          <View style={styles.gradClear} />
-          <View style={styles.gradFade} />
-          <View style={styles.gradDark} />
+          <View style={{ flex: GRAD_TOP_FLEX }} />
+          {GRAD_STEPS.map((step, i) => (
+            <View
+              key={i}
+              style={{ flex: 1, backgroundColor: `rgba(0,0,0,${step.opacity})` }}
+            />
+          ))}
         </View>
 
-        {/* ── absolute layer: progress bars ── */}
+        {/* absolute: photo progress bars */}
         {hasMultiplePhotos && (
           <View style={styles.photoBars} pointerEvents="none">
             {sortedPhotos.map((_, i) => (
@@ -142,7 +157,7 @@ function SwipeCard({
           </View>
         )}
 
-        {/* ── absolute layer: swipe direction badges ── */}
+        {/* absolute: swipe direction badges */}
         <Animated.View
           style={[styles.swipeLabel, styles.swipeLabelRequest, requestOverlayStyle]}
           pointerEvents="none"
@@ -156,7 +171,7 @@ function SwipeCard({
           <Text style={styles.swipeLabelPassText}>PASS</Text>
         </Animated.View>
 
-        {/* ── flex spacer: fills space above cardBottom, hosts tap zones ── */}
+        {/* flex spacer: holds the photo tap zones, pushes cardBottom down */}
         <View style={styles.photoArea}>
           {hasMultiplePhotos && (
             <>
@@ -174,63 +189,18 @@ function SwipeCard({
           )}
         </View>
 
-        {/* ── flex: card bottom — in normal flow, sits at bottom of card ── */}
+        {/* card bottom — in normal flex flow, always at the physical bottom */}
         <View style={styles.cardBottom}>
-          {/* Expanded details panel — dark overlay growing upward */}
-          {expanded && (
-            <View style={styles.expandedPanel}>
-              <Text style={styles.expandedTitle} numberOfLines={2}>
-                {listing.title}
-              </Text>
-              {listing.description ? (
-                <Text style={styles.expandedDesc} numberOfLines={4}>
-                  {listing.description}
-                </Text>
-              ) : (
-                <Text style={styles.expandedDescEmpty}>
-                  No description provided.
-                </Text>
-              )}
-              <View style={styles.expandedRows}>
-                {dateRange ? (
-                  <View style={styles.expandedRow}>
-                    <Text style={styles.expandedRowLabel}>Dates</Text>
-                    <Text style={styles.expandedRowValue}>{dateRange}</Text>
-                  </View>
-                ) : null}
-                <View style={styles.expandedRow}>
-                  <Text style={styles.expandedRowLabel}>Utilities</Text>
-                  <Text style={styles.expandedRowValue}>
-                    {labelFor(UTILITIES_INCLUDED, listing.utilities_included)}
-                  </Text>
-                </View>
-                {listing.security_deposit != null && (
-                  <View style={styles.expandedRow}>
-                    <Text style={styles.expandedRowLabel}>Deposit</Text>
-                    <Text style={styles.expandedRowValue}>
-                      ${listing.security_deposit}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Pressable onPress={onTapDetail} hitSlop={8}>
-                <Text style={styles.viewFullBtnText}>View full listing →</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Info: rent, meta, location, chips, controls */}
           <View style={styles.infoArea}>
             <Text style={styles.infoRent}>${listing.monthly_rent}/mo</Text>
-            <View style={styles.infoMetaRow}>
-              <Text style={styles.infoMeta}>
-                {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
-              </Text>
-              <Text style={styles.infoMetaDot}> · </Text>
-              <Text style={styles.infoMeta}>
-                {fmtHousingType(listing.housing_type, listing.bedrooms)}
-              </Text>
-            </View>
+            <Text style={styles.infoTitle} numberOfLines={1}>
+              {listing.title}
+            </Text>
+            <Text style={styles.infoMeta} numberOfLines={1}>
+              {fmtUnitMeta(listing.housing_type, listing.bedrooms, listing.bathrooms)}
+              {" · "}
+              {fmtHousingType(listing.housing_type, listing.bedrooms)}
+            </Text>
             <Text style={styles.infoLocation} numberOfLines={1}>
               {listing.neighborhood}
               {dateRange ? `  ·  ${dateRange}` : ""}
@@ -244,26 +214,12 @@ function SwipeCard({
                 ))}
               </View>
             )}
-            <View style={styles.infoStripRow}>
-              {/* Details ˅ — expands/collapses in-card panel */}
-              <Pressable
-                onPress={() => setExpanded((e) => !e)}
-                hitSlop={10}
-              >
-                <Text style={styles.detailsToggleText}>
-                  {expanded ? "Less ˄" : "Details ˅"}
-                </Text>
-              </Pressable>
-              {/* View listing → — navigates to full listing detail route */}
-              <Pressable onPress={onTapDetail} hitSlop={10}>
-                <Text style={styles.viewListingInlineText}>
-                  View listing →
-                </Text>
-              </Pressable>
-            </View>
+            {/* Single "View listing" action — tap navigates to full detail screen */}
+            <Pressable onPress={onTapDetail} hitSlop={10} style={styles.viewListingBtn}>
+              <Text style={styles.viewListingBtnText}>View listing →</Text>
+            </Pressable>
           </View>
 
-          {/* Pass / Request buttons */}
           <View style={styles.buttonsRow}>
             <Pressable
               style={[styles.passBtn, disabled && styles.btnDisabled]}
@@ -300,7 +256,6 @@ export default function FeedScreen() {
 
   const cardTranslateX = useSharedValue(0);
   const cardTranslateY = useSharedValue(0);
-
   const lastRequestedId = useRef<string | null>(null);
 
   const currentListing = listings[index];
@@ -415,8 +370,6 @@ export default function FeedScreen() {
   }
 
   return (
-    // White container — status bar renders cleanly above this with default dark content.
-    // The card carries the dark/immersive aesthetic; the safe area above stays light.
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View>
@@ -473,12 +426,10 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ── screen ──────────────────────────────────────────────────────────────
-  // White background: status bar area stays clean, no dark overlay behind clock/battery.
+  // White background so the status bar area stays clean above the card.
   container: { flex: 1, backgroundColor: "#fff" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
 
-  // ── header ──────────────────────────────────────────────────────────────
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -492,16 +443,9 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 11, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
   headerCount: { fontSize: 12, color: "#aaa" },
 
-  // ── card area ────────────────────────────────────────────────────────────
-  // Small gap around the card; light background peeks through the border radius.
-  cardArea: {
-    flex: 1,
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
+  cardArea: { flex: 1, paddingHorizontal: 8, paddingBottom: 8 },
 
-  // ── card ─────────────────────────────────────────────────────────────────
-  // flex:1 fills cardArea. flexDirection:'column' (default) stacks photoArea + cardBottom.
+  // flex:1 makes the card fill all remaining vertical space.
   card: {
     flex: 1,
     borderRadius: 16,
@@ -514,7 +458,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  // ── photo (absolute fill) ─────────────────────────────────────────────────
   fill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   photoPlaceholder: {
     justifyContent: "center",
@@ -524,16 +467,10 @@ const styles = StyleSheet.create({
   },
   placeholderText: { color: "rgba(255,255,255,0.3)", fontSize: 13 },
 
-  // ── gradient (absolute fill) — only bottom 60% is colored ────────────────
-  // gradClear covers the top 40%: photo shows through without dimming.
-  // gradFade is the transition zone.
-  // gradDark covers the bottom 30%: enough for text readability.
+  // Gradient container spans the full card. The transparent top flex + thin
+  // stepped bands below approximate a smooth linear gradient without LinearGradient.
   gradient: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  gradClear: { flex: 4 },
-  gradFade: { flex: 3, backgroundColor: "rgba(0,0,0,0.45)" },
-  gradDark: { flex: 3, backgroundColor: "rgba(0,0,0,0.75)" },
 
-  // ── progress bars (absolute top) ─────────────────────────────────────────
   photoBars: {
     position: "absolute",
     top: 10,
@@ -550,7 +487,6 @@ const styles = StyleSheet.create({
   },
   photoBarActive: { backgroundColor: "rgba(255,255,255,0.95)" },
 
-  // ── swipe badges (absolute) ───────────────────────────────────────────────
   swipeLabel: {
     position: "absolute",
     top: 24,
@@ -583,72 +519,41 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
 
-  // ── photo area (flex spacer, hosts tap zones) ─────────────────────────────
-  // flex:1 pushes cardBottom to the bottom of the card.
-  // Tap zones are positioned absolute *within* this view, so they only
-  // cover the photo portion — not the info/buttons below.
+  // flex:1 spacer that pushes cardBottom to the physical bottom of the card.
+  // Tap zones are absolute within this view so they only cover the photo area.
   photoArea: { flex: 1 },
   tapZone: { position: "absolute", top: 0, bottom: 0 },
   tapZoneLeft: { left: 0, width: "30%" },
   tapZoneRight: { right: 0, width: "30%" },
 
-  // ── card bottom (in normal flex flow — always at the physical bottom) ──────
-  // No position:absolute here. cardBottom sits naturally below photoArea
-  // in the flex column, so it always renders at the correct position.
+  // In normal flex flow — no position:absolute, always renders at the true bottom.
   cardBottom: {},
 
-  // ── expanded panel ────────────────────────────────────────────────────────
-  expandedPanel: {
-    backgroundColor: "rgba(0,0,0,0.88)",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-    gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.12)",
-  },
-  expandedTitle: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  expandedDesc: { fontSize: 13, color: "rgba(255,255,255,0.82)", lineHeight: 19 },
-  expandedDescEmpty: { fontSize: 13, color: "rgba(255,255,255,0.4)", fontStyle: "italic" },
-  expandedRows: { gap: 0 },
-  expandedRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  expandedRowLabel: { fontSize: 12, color: "rgba(255,255,255,0.5)" },
-  expandedRowValue: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.9)",
-    fontWeight: "600",
-    textAlign: "right",
-    flex: 1,
-    marginLeft: 8,
-  },
-  viewFullBtnText: { fontSize: 13, color: "#60a5fa", fontWeight: "600" },
-
-  // ── info area ─────────────────────────────────────────────────────────────
   infoArea: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 6,
-    gap: 3,
+    gap: 2,
   },
   infoRent: {
     fontSize: 28,
     fontWeight: "800",
     color: "#fff",
-    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowColor: "rgba(0,0,0,0.4)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  infoMetaRow: { flexDirection: "row", alignItems: "center" },
-  infoMeta: { fontSize: 13, color: "rgba(255,255,255,0.9)", fontWeight: "600" },
-  infoMetaDot: { fontSize: 13, color: "rgba(255,255,255,0.5)" },
-  infoLocation: { fontSize: 13, color: "rgba(255,255,255,0.72)" },
+  infoTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.92)",
+  },
+  infoMeta: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.82)",
+    fontWeight: "500",
+  },
+  infoLocation: { fontSize: 13, color: "rgba(255,255,255,0.68)" },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 2 },
   chip: {
     backgroundColor: "rgba(255,255,255,0.15)",
@@ -659,23 +564,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.22)",
   },
   chipText: { fontSize: 11, color: "#fff", fontWeight: "600" },
-  infoStripRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  // "Details ˅" — expands in-card panel
-  detailsToggleText: { fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.75)" },
-  // "View listing →" — navigates to /listings/[id]
-  viewListingInlineText: { fontSize: 13, fontWeight: "600", color: "#60a5fa" },
+  viewListingBtn: { marginTop: 6 },
+  viewListingBtnText: { fontSize: 13, fontWeight: "600", color: "#60a5fa" },
 
-  // ── buttons ───────────────────────────────────────────────────────────────
   buttonsRow: {
     flexDirection: "row",
     gap: 12,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 16,
   },
   passBtn: {
@@ -698,7 +594,6 @@ const styles = StyleSheet.create({
   requestBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   btnDisabled: { opacity: 0.5 },
 
-  // ── empty / error ─────────────────────────────────────────────────────────
   emptyWrap: {
     flex: 1,
     justifyContent: "center",

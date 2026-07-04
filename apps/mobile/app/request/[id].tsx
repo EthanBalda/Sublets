@@ -266,7 +266,7 @@ export default function RequestDetailScreen() {
         detail.seeker_id,
         detail.lister_id
       );
-      router.push(`/message/${convId}`);
+      router.push(`/message/${convId}?returnTo=/request/${detail.id}` as Parameters<typeof router.push>[0]);
     } catch (e: unknown) {
       Alert.alert(
         "Error",
