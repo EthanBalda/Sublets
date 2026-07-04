@@ -29,20 +29,13 @@ import type { Tables } from "@sublets/shared/types";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 
-// Multi-step gradient approximation: transparent at top, dark at bottom.
-// Using 9 thin equal-height steps in the bottom 55% of the card so transitions
-// are small enough to read as a smooth fade without LinearGradient.
-const GRAD_TOP_FLEX = 5;
-const GRAD_STEPS: { opacity: number }[] = [
-  { opacity: 0.04 },
-  { opacity: 0.11 },
-  { opacity: 0.21 },
-  { opacity: 0.33 },
-  { opacity: 0.47 },
-  { opacity: 0.60 },
-  { opacity: 0.71 },
-  { opacity: 0.79 },
-  { opacity: 0.84 },
+// Bottom-anchored gradient steps (opacity only, no transparent top zone).
+// The container is positioned at bottom:0 height:"55%", so the first step (opacity 0)
+// sits right at the gradient's top edge — no hard boundary with the clean photo above.
+// 15 steps follow an easeIn curve so early increments are tiny and imperceptible.
+const GRAD_STEPS: number[] = [
+  0, 0.03, 0.07, 0.12, 0.18, 0.25, 0.33, 0.42,
+  0.51, 0.60, 0.68, 0.74, 0.79, 0.83, 0.86,
 ];
 
 type ListingWithPhotos = Tables<"listings"> & {
@@ -101,8 +94,12 @@ function SwipeCard({
         translateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
         runOnJS(onRequest)();
       } else if (e.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 });
-        runOnJS(onPass)();
+        // Animate card off-screen left; advance only after animation completes.
+        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 }, (finished) => {
+          if (finished) {
+            runOnJS(onPass)();
+          }
+        });
       } else {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
@@ -134,13 +131,13 @@ function SwipeCard({
           </View>
         )}
 
-        {/* absolute: smooth bottom gradient — transparent top, dark bottom */}
+        {/* absolute: gradient anchored to bottom 55% only — no transparent zone above,
+            so there is no hard edge between clean photo and gradient start */}
         <View style={styles.gradient} pointerEvents="none">
-          <View style={{ flex: GRAD_TOP_FLEX }} />
-          {GRAD_STEPS.map((step, i) => (
+          {GRAD_STEPS.map((opacity, i) => (
             <View
               key={i}
-              style={{ flex: 1, backgroundColor: `rgba(0,0,0,${step.opacity})` }}
+              style={{ flex: 1, backgroundColor: `rgba(0,0,0,${opacity})` }}
             />
           ))}
         </View>
@@ -223,7 +220,14 @@ function SwipeCard({
           <View style={styles.buttonsRow}>
             <Pressable
               style={[styles.passBtn, disabled && styles.btnDisabled]}
-              onPress={onPass}
+              onPress={() => {
+                // Mirror swipe-left: animate card off-screen left, advance in callback.
+                translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 }, (finished) => {
+                  if (finished) {
+                    runOnJS(onPass)();
+                  }
+                });
+              }}
               disabled={disabled}
             >
               <Text style={styles.passBtnText}>Pass</Text>
@@ -355,7 +359,8 @@ export default function FeedScreen() {
   }
 
   function handlePass() {
-    if (requesting) return;
+    // Called after pass animation completes (from swipe-left or Pass button callback).
+    // Reset shared values so the incoming card starts at center.
     cardTranslateX.value = 0;
     cardTranslateY.value = 0;
     setIndex((i) => i + 1);
@@ -467,9 +472,10 @@ const styles = StyleSheet.create({
   },
   placeholderText: { color: "rgba(255,255,255,0.3)", fontSize: 13 },
 
-  // Gradient container spans the full card. The transparent top flex + thin
-  // stepped bands below approximate a smooth linear gradient without LinearGradient.
-  gradient: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  // Gradient anchored to the bottom 55% of the card only.
+  // Above this view the photo is completely unobscured — no dark overlay anywhere
+  // in the upper half. The first step has opacity 0 so there is no hard edge.
+  gradient: { position: "absolute", bottom: 0, left: 0, right: 0, height: "55%" },
 
   photoBars: {
     position: "absolute",
