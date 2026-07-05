@@ -140,6 +140,38 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 
 ---
 
+---
+
+## 11. Account & Support
+
+- [ ] Account tab shows: name, email, role badge, major, graduation year, campus
+- [ ] "My Sent Requests →" navigates to request list
+- [ ] Support section shows: Send Feedback, Report a Problem, Privacy Policy, Terms of Use
+- [ ] Tapping "Send Feedback" opens mailto link
+- [ ] Tapping "Report a Problem" opens mailto link
+- [ ] Tapping "Privacy Policy" opens browser (placeholder URL)
+- [ ] Tapping "Terms of Use" opens browser (placeholder URL)
+- [ ] Log Out shows confirmation dialog; confirms → returns to login screen
+
+---
+
+## Beta Smoke Test (run before every TestFlight build)
+
+Minimum set of flows to verify before releasing a build:
+
+- [ ] Cold launch → loading spinner → login screen
+- [ ] Magic link login with UCSD `.edu` email works end-to-end
+- [ ] Feed loads and shows listings; swipe left/right both animate correctly
+- [ ] Create a new listing, publish it; listing appears in My Listings
+- [ ] Send a request from the feed; request appears in Requests tab
+- [ ] Accept a request (lister view); "Message" button appears
+- [ ] Send a message; message appears in thread immediately
+- [ ] Account tab loads; Log Out works
+- [ ] No TypeScript build errors (`npm run typecheck` passes)
+- [ ] No lint errors (`npm run lint` passes)
+
+---
+
 ## Known Limitations (v1)
 
 - Realtime updates not implemented — refresh screens manually to see updates
@@ -150,3 +182,4 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 - No landlord portal — listers manage approvals directly
 - Photos: HEIC format may not display in all Image components (iOS-only format)
 - Storage cleanup: orphaned storage objects from deleted listings are not cleaned up (only replaced photos are cleaned)
+- Privacy Policy and Terms of Use URLs are placeholders — real pages needed before public beta

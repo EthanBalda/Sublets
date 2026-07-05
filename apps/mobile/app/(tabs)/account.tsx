@@ -1,4 +1,4 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
@@ -81,6 +81,38 @@ export default function AccountScreen() {
         <Text style={styles.outgoingBtnText}>My Sent Requests →</Text>
       </Pressable>
 
+      <View style={styles.card}>
+        <Text style={styles.sectionLabel}>Support</Text>
+        <Pressable
+          style={styles.linkRow}
+          onPress={() => void Linking.openURL("mailto:hello@sublets.app?subject=Feedback")}
+        >
+          <Text style={styles.linkRowText}>Send Feedback</Text>
+          <Text style={styles.linkRowChevron}>›</Text>
+        </Pressable>
+        <Pressable
+          style={styles.linkRow}
+          onPress={() => void Linking.openURL("mailto:hello@sublets.app?subject=Problem Report")}
+        >
+          <Text style={styles.linkRowText}>Report a Problem</Text>
+          <Text style={styles.linkRowChevron}>›</Text>
+        </Pressable>
+        <Pressable
+          style={styles.linkRow}
+          onPress={() => void Linking.openURL("https://sublets.app/privacy")}
+        >
+          <Text style={styles.linkRowText}>Privacy Policy</Text>
+          <Text style={styles.linkRowChevron}>›</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.linkRow, { borderBottomWidth: 0 }]}
+          onPress={() => void Linking.openURL("https://sublets.app/terms")}
+        >
+          <Text style={styles.linkRowText}>Terms of Use</Text>
+          <Text style={styles.linkRowChevron}>›</Text>
+        </Pressable>
+      </View>
+
       <Pressable style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutBtnText}>Log Out</Text>
       </Pressable>
@@ -146,6 +178,17 @@ const styles = StyleSheet.create({
     borderColor: "#fecaca",
   },
   logoutBtnText: { fontSize: 15, fontWeight: "600", color: "#dc2626" },
+  sectionLabel: { fontSize: 12, fontWeight: "700", color: "#aaa", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
+  linkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#eee",
+  },
+  linkRowText: { fontSize: 15, color: "#1a1a1a" },
+  linkRowChevron: { fontSize: 18, color: "#ccc" },
   errorText: { fontSize: 15, color: "#dc2626" },
   versionText: { fontSize: 12, color: "#bbb", textAlign: "center", marginTop: 4 },
 });
