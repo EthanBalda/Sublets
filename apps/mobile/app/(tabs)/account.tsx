@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 import { useAuth } from "@/context/AuthContext";
 import type { ProfileRole } from "@sublets/shared/types";
+import { PUBLIC_WEB_URL } from "@/lib/config";
 
 const ROLE_LABEL: Record<ProfileRole, string> = {
   seeker: "Seeker",
@@ -85,28 +86,28 @@ export default function AccountScreen() {
         <Text style={styles.sectionLabel}>Support</Text>
         <Pressable
           style={styles.linkRow}
-          onPress={() => void Linking.openURL("mailto:hello@sublets.app?subject=Feedback")}
+          onPress={() => void Linking.openURL(`${PUBLIC_WEB_URL}/support`)}
         >
           <Text style={styles.linkRowText}>Send Feedback</Text>
           <Text style={styles.linkRowChevron}>›</Text>
         </Pressable>
         <Pressable
           style={styles.linkRow}
-          onPress={() => void Linking.openURL("mailto:hello@sublets.app?subject=Problem Report")}
+          onPress={() => void Linking.openURL(`${PUBLIC_WEB_URL}/support`)}
         >
           <Text style={styles.linkRowText}>Report a Problem</Text>
           <Text style={styles.linkRowChevron}>›</Text>
         </Pressable>
         <Pressable
           style={styles.linkRow}
-          onPress={() => void Linking.openURL("https://sublets.app/privacy")}
+          onPress={() => void Linking.openURL(`${PUBLIC_WEB_URL}/privacy`)}
         >
           <Text style={styles.linkRowText}>Privacy Policy</Text>
           <Text style={styles.linkRowChevron}>›</Text>
         </Pressable>
         <Pressable
           style={[styles.linkRow, { borderBottomWidth: 0 }]}
-          onPress={() => void Linking.openURL("https://sublets.app/terms")}
+          onPress={() => void Linking.openURL(`${PUBLIC_WEB_URL}/terms`)}
         >
           <Text style={styles.linkRowText}>Terms of Use</Text>
           <Text style={styles.linkRowChevron}>›</Text>
