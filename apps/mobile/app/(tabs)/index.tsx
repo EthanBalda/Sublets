@@ -29,14 +29,6 @@ import type { Tables } from "@sublets/shared/types";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 
-// Bottom-anchored gradient steps (opacity only, no transparent top zone).
-// The container is positioned at bottom:0 height:"55%", so the first step (opacity 0)
-// sits right at the gradient's top edge — no hard boundary with the clean photo above.
-// 15 steps follow an easeIn curve so early increments are tiny and imperceptible.
-const GRAD_STEPS: number[] = [
-  0, 0.03, 0.07, 0.12, 0.18, 0.25, 0.33, 0.42,
-  0.51, 0.60, 0.68, 0.74, 0.79, 0.83, 0.86,
-];
 
 type ListingWithPhotos = Tables<"listings"> & {
   listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
@@ -94,12 +86,8 @@ function SwipeCard({
         translateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
         runOnJS(onRequest)();
       } else if (e.translationX < -SWIPE_THRESHOLD) {
-        // Animate card off-screen left; advance only after animation completes.
-        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 }, (finished) => {
-          if (finished) {
-            runOnJS(onPass)();
-          }
-        });
+        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 });
+        runOnJS(onPass)();
       } else {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
@@ -131,16 +119,8 @@ function SwipeCard({
           </View>
         )}
 
-        {/* absolute: gradient anchored to bottom 55% only — no transparent zone above,
-            so there is no hard edge between clean photo and gradient start */}
-        <View style={styles.gradient} pointerEvents="none">
-          {GRAD_STEPS.map((opacity, i) => (
-            <View
-              key={i}
-              style={{ flex: 1, backgroundColor: `rgba(0,0,0,${opacity})` }}
-            />
-          ))}
-        </View>
+        {/* One solid scrim at the bottom third — no stacked layers, no banding */}
+        <View style={styles.scrim} pointerEvents="none" />
 
         {/* absolute: photo progress bars */}
         {hasMultiplePhotos && (
@@ -220,14 +200,7 @@ function SwipeCard({
           <View style={styles.buttonsRow}>
             <Pressable
               style={[styles.passBtn, disabled && styles.btnDisabled]}
-              onPress={() => {
-                // Mirror swipe-left: animate card off-screen left, advance in callback.
-                translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 }, (finished) => {
-                  if (finished) {
-                    runOnJS(onPass)();
-                  }
-                });
-              }}
+              onPress={onPass}
               disabled={disabled}
             >
               <Text style={styles.passBtnText}>Pass</Text>
@@ -359,8 +332,7 @@ export default function FeedScreen() {
   }
 
   function handlePass() {
-    // Called after pass animation completes (from swipe-left or Pass button callback).
-    // Reset shared values so the incoming card starts at center.
+    if (requesting) return;
     cardTranslateX.value = 0;
     cardTranslateY.value = 0;
     setIndex((i) => i + 1);
@@ -472,10 +444,16 @@ const styles = StyleSheet.create({
   },
   placeholderText: { color: "rgba(255,255,255,0.3)", fontSize: 13 },
 
-  // Gradient anchored to the bottom 55% of the card only.
-  // Above this view the photo is completely unobscured — no dark overlay anywhere
-  // in the upper half. The first step has opacity 0 so there is no hard edge.
-  gradient: { position: "absolute", bottom: 0, left: 0, right: 0, height: "55%" },
+  // Single solid scrim — one layer, no stepped views, no banding possible.
+  // Covers only the bottom 35% so the upper 65% of the photo is completely untouched.
+  scrim: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "35%",
+    backgroundColor: "rgba(0,0,0,0.42)",
+  },
 
   photoBars: {
     position: "absolute",
@@ -528,7 +506,7 @@ const styles = StyleSheet.create({
   // flex:1 spacer that pushes cardBottom to the physical bottom of the card.
   // Tap zones are absolute within this view so they only cover the photo area.
   photoArea: { flex: 1 },
-  tapZone: { position: "absolute", top: 0, bottom: 0 },
+  tapZone: { position: "absolute", top: 0, bottom: 0, backgroundColor: "transparent" },
   tapZoneLeft: { left: 0, width: "30%" },
   tapZoneRight: { right: 0, width: "30%" },
 
