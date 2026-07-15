@@ -7,9 +7,7 @@ export type ListingWithCover = Tables<"listings"> & {
   listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
 };
 
-export type ListingWithPhotos = Tables<"listings"> & {
-  listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
-};
+export type ListingWithPhotos = ListingWithCover;
 
 export async function getMyListings(profileId: string): Promise<ListingWithCover[]> {
   const { data, error } = await supabase

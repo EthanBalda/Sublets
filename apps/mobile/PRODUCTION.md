@@ -34,11 +34,15 @@ eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "
 
 ## Supabase
 
-- All 11 tables have RLS enabled — no changes needed for production.
-- No service-role key is used client-side.
-- Storage bucket `listing-photos` must exist with public read policy.
-- Email auth (magic link) must be enabled in the Supabase dashboard.
-- Confirm UCSD email domain (`ucsd.edu`) is the only allowed campus in `profiles` constraint.
+- Apply every migration in `supabase/migrations/` (0001–0005) with `supabase db push`.
+- All tables have RLS enabled; no service-role key is used client-side.
+- Storage bucket `listing-photos` is created by migration 0003 (public read).
+- Email **password** auth must be enabled in the Supabase dashboard (the app
+  signs in with `signInWithPassword` and auto-signs-up new users). Decide the
+  "Confirm email" setting deliberately: if ON, new users must open the
+  confirmation email before they can sign in.
+- UCSD gating (`ucsd.edu`) is enforced in the clients via `classifyEmail` —
+  there is no database-level restriction on signup email domains.
 
 ---
 
@@ -61,7 +65,7 @@ Add beta testers in App Store Connect → TestFlight → Internal Testing.
 
 ## Test accounts
 
-Create real UCSD `.edu` accounts for smoke testing. Do not use fake or non-.edu addresses — the magic link flow requires real email delivery.
+Create real UCSD `.edu` accounts for smoke testing. If email confirmations are enabled in Supabase, the address must actually receive mail.
 
 Recommended:
 - One seeker account (no listings)

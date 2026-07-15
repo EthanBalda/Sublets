@@ -24,15 +24,10 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { fmtHousingType, fmtUnitMeta, fmtDateRange } from "@/lib/format";
-import type { Tables } from "@sublets/shared/types";
+import type { ListingWithPhotos } from "@/lib/listings";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
-
-
-type ListingWithPhotos = Tables<"listings"> & {
-  listing_photos: Pick<Tables<"listing_photos">, "storage_url" | "sort_order">[];
-};
 
 function SwipeCard({
   listing,
@@ -234,6 +229,9 @@ export default function FeedScreen() {
   const cardTranslateX = useSharedValue(0);
   const cardTranslateY = useSharedValue(0);
   const lastRequestedId = useRef<string | null>(null);
+  // Index already acted on (pass or request). Blocks double-taps and
+  // swipe+button races from advancing twice / skipping a card.
+  const actedIndex = useRef(-1);
 
   const currentListing = listings[index];
   const remaining = listings.length - index;
@@ -278,6 +276,7 @@ export default function FeedScreen() {
       setListings(filtered);
       setIndex(0);
       lastRequestedId.current = null;
+      actedIndex.current = -1;
       cardTranslateX.value = 0;
       cardTranslateY.value = 0;
     } catch (e: unknown) {
@@ -292,7 +291,9 @@ export default function FeedScreen() {
     const listing = listings[index];
     if (!listing) return;
     if (lastRequestedId.current === listing.id) return;
+    if (actedIndex.current === index) return;
 
+    actedIndex.current = index;
     lastRequestedId.current = listing.id;
     setRequesting(true);
 
@@ -311,6 +312,7 @@ export default function FeedScreen() {
       setIndex((i) => i + 1);
     } else {
       lastRequestedId.current = null;
+      actedIndex.current = -1;
       cancelAnimation(cardTranslateX);
       cancelAnimation(cardTranslateY);
       cardTranslateX.value = withSpring(0, { damping: 20 });
@@ -333,6 +335,8 @@ export default function FeedScreen() {
 
   function handlePass() {
     if (requesting) return;
+    if (actedIndex.current === index) return;
+    actedIndex.current = index;
     cardTranslateX.value = 0;
     cardTranslateY.value = 0;
     setIndex((i) => i + 1);

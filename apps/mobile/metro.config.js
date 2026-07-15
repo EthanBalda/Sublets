@@ -7,7 +7,8 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 const config = getDefaultConfig(projectRoot);
 
 // Watch all files in the monorepo so Metro sees changes in packages/shared.
-config.watchFolders = [workspaceRoot];
+// Keep Expo's default watch folders (expo-doctor checks for them).
+config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
 
 // Resolve hoisted packages from the workspace root node_modules.
 config.resolver.nodeModulesPaths = [

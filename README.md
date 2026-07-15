@@ -2,9 +2,18 @@
 
 Verified student sublets, campus by campus.
 
-Sublets is a mobile-first responsive web MVP that lets verified college students list and find short-term sublets at their own school. The v1 beta is scoped to UC San Diego (`ucsd.edu`); other students can join a waitlist.
+Sublets lets verified college students list and find short-term sublets at their own school. The v1 beta is scoped to UC San Diego (`ucsd.edu`); other students can join a waitlist.
 
-## Tech
+## Monorepo layout (npm workspaces)
+
+- `apps/mobile` — Expo (SDK 54) React Native app. **Primary product.** See `apps/mobile/PRODUCTION.md` and `apps/mobile/TESTING.md`.
+- `apps/web` — Next.js 16 app: auth, dashboard/admin, and the public legal/support pages the mobile app links to. Deploys on Vercel (root directory `apps/web`).
+- `packages/shared` — shared TypeScript types, constants, and campus/email logic.
+- `supabase/` — SQL migrations and seed data.
+
+The rest of this README documents the **web app** (`apps/web`); paths below are relative to that folder.
+
+## Tech (web)
 
 - Next.js 16 (App Router)
 - React 19
@@ -13,7 +22,7 @@ Sublets is a mobile-first responsive web MVP that lets verified college students
 - Supabase (Postgres + Auth via email/password)
 - Deploys on Vercel
 
-Payments, AI, native mobile, real ID verification, landlord portal, legal-doc generation, premium checkout, and messaging are intentionally **not** built yet — see `CLAUDE.md` for the scope guardrails.
+Payments, AI, real ID verification, landlord portal, legal-doc generation, and premium checkout are intentionally **not** built — see `CLAUDE.md` for the scope guardrails.
 
 ## Local setup
 
@@ -21,23 +30,25 @@ Requires Node.js 18.18+ (Next.js 16) and npm.
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in real Supabase values for auth to work
-npm run dev
+cp apps/web/.env.example apps/web/.env.local   # then fill in real Supabase values
+npm run dev:web
 ```
 
 Open <http://localhost:3000>.
 
-The app boots without Supabase credentials — public routes (`/`, `/login`, `/waitlist`) still render. But the login form and any gated route need real env values.
+The app boots without Supabase credentials — public routes (`/`, `/login`, `/waitlist`, `/privacy`, `/terms`, `/support`) still render. But the login form and any gated route need real env values.
 
-Other scripts:
+Other scripts (run from the repo root):
 
 ```bash
-npm run build   # production build
-npm run start   # serve the production build
-npm run lint    # eslint
+npm run build:web     # web production build
+npm run dev:mobile    # expo start (needs apps/mobile/.env)
+npm run lint --workspace=apps/web
+npm run lint --workspace=mobile
+npm run typecheck --workspace=mobile
 ```
 
-### Required environment variables (`.env.local`)
+### Required environment variables (`apps/web/.env.local`)
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
@@ -51,7 +62,7 @@ Both come from **Supabase Dashboard → Project Settings → API**.
 ### 1. Create a project + apply schema
 
 1. Create a project at <https://supabase.com> and copy the URL + anon key into `.env.local`.
-2. **SQL editor (easiest):** open Supabase Studio → SQL Editor → paste the contents of `supabase/migrations/0001_initial_schema.sql` and run, then do the same with `supabase/seed.sql`.
+2. **SQL editor (easiest):** open Supabase Studio → SQL Editor → run each file in `supabase/migrations/` in order (0001 → 0005), then `supabase/seed.sql`.
 3. Or via CLI:
    ```bash
    supabase link --project-ref <your-project-ref>
@@ -95,7 +106,7 @@ Gating logic lives in **`lib/auth/session.ts`**:
 - `requireOnboardedUser()` — used by `(app)/layout.tsx`. Authenticated, profile present + `is_onboarded`, `is_suspended = false`, campus `is_supported`.
 - `requireAdminUser()` — used by `/admin`. All of the above **plus** `profile.is_admin = true`.
 
-Session refresh on every request is handled by `middleware.ts` + `lib/supabase/middleware.ts`.
+Session refresh on every request is handled by `proxy.ts` (Next 16's rename of `middleware.ts`) + `lib/supabase/middleware.ts`.
 
 ## Creating a test UCSD user
 
@@ -442,8 +453,8 @@ lib/
     browser.ts         # getSupabaseBrowserClient — Client Components
     middleware.ts      # updateSession helper used by root middleware
     types.ts           # hand-rolled Database type
-middleware.ts          # session refresh
-supabase/
+proxy.ts               # session refresh (Next 16 middleware)
+../../supabase/
   migrations/          # SQL migrations applied in order
   seed.sql             # idempotent seed data
 ```
@@ -464,4 +475,4 @@ The `(marketing)`, `(post-login)`, and `(app)` folders are Next.js route groups 
 
 ## Manual QA
 
-See **[TESTING.md](./TESTING.md)** for step-by-step manual test flows covering auth, listings, explore, messaging, requests, reports, admin moderation, analytics, and deployment checks.
+See **[apps/web/TESTING.md](./apps/web/TESTING.md)** (web) and **[apps/mobile/TESTING.md](./apps/mobile/TESTING.md)** (mobile) for step-by-step manual test flows.

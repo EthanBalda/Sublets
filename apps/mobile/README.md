@@ -1,56 +1,38 @@
-# Welcome to your Expo app 👋
+# Sublets Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo (SDK 54) React Native app — the primary Sublets product. Verified UCSD
+students browse a full-screen swipe feed of sublet listings, send interest
+requests, and message after acceptance.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run it
 
 ```bash
-npm run reset-project
+# from the repo root
+npm install
+cp apps/mobile/.env.example apps/mobile/.env   # fill in Supabase URL + anon key
+npm run dev:mobile                              # expo start (Expo Go compatible)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Checks
 
-### Other setup steps
+```bash
+npm run typecheck --workspace=mobile
+npm run lint --workspace=mobile
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Structure
 
-## Learn more
+- `app/` — Expo Router routes: `(auth)` login, `(onboarding)`, `(tabs)` (Feed,
+  Requests, Messages, My Listings, Account), plus `listings/`, `request/`,
+  `message/`, and `my-requests` detail screens.
+- `src/lib/` — Supabase client, listings/photos/messages helpers, formatting,
+  navigation helper.
+- `src/context/AuthContext.tsx` — session + profile state, startup recovery.
+- Shared types/constants come from `@sublets/shared` (`packages/shared`).
 
-To learn more about developing your project with Expo, look at the following resources:
+## Docs
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- `PRODUCTION.md` — EAS build/TestFlight setup and release checklist.
+- `TESTING.md` — manual QA checklist.
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Do not upgrade the Expo SDK or break Expo Go compatibility without approval.

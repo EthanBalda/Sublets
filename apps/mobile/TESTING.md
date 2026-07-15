@@ -7,9 +7,12 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 ## 1. Auth & Onboarding
 
 - [ ] Cold launch shows loading spinner, then redirects to login
-- [ ] Login with valid UCSD .edu email sends magic link
-- [ ] Tapping magic link opens app and lands on feed (if onboarded)
-- [ ] New user after magic link lands on onboarding flow
+- [ ] Non-UCSD email is rejected with "UCSD only" alert
+- [ ] Login with valid UCSD .edu email + password signs in
+- [ ] Unknown email + password creates an account (auto sign-up); if email
+      confirmations are enabled, a "Check your email" alert is shown
+- [ ] Wrong password on an existing account shows a clear error
+- [ ] New user lands on onboarding flow after first sign-in
 - [ ] Onboarding: fill name, major, graduation year, role — submit works
 - [ ] After onboarding, feed is shown
 - [ ] Logout from Account tab shows confirmation dialog
@@ -53,6 +56,7 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 - [ ] Swipe left → Pass (card animates off left)
 - [ ] "Request" button at bottom sends request
 - [ ] "Pass" button dismisses card
+- [ ] Rapid double-tap on Pass or Request advances only one card
 - [ ] Already-requested listings do not reappear in feed
 - [ ] "All caught up" message when feed is empty
 - [ ] Feed retry button works if load fails
@@ -88,6 +92,7 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 ## 7. Requests
 
 - [ ] Requests tab shows Incoming (lister view) and My Requests (seeker view)
+- [ ] Requests tab badge = pending incoming + accepted outgoing (refreshes ~30s)
 - [ ] Incoming: tapping card opens request detail
 - [ ] My Requests: tapping card opens request detail
 - [ ] Account → "My Sent Requests" → tapping card opens request detail
@@ -105,6 +110,7 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 ## 8. Messaging
 
 - [ ] Accepted request shows "Message" button in request detail
+- [ ] Messages tab badge = unread incoming messages; clears after opening the thread (refreshes ~30s)
 - [ ] Tapping "Message" opens conversation thread
 - [ ] Messages tab shows conversations list
 - [ ] Tapping conversation opens thread
@@ -147,10 +153,9 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 - [ ] Account tab shows: name, email, role badge, major, graduation year, campus
 - [ ] "My Sent Requests →" navigates to request list
 - [ ] Support section shows: Send Feedback, Report a Problem, Privacy Policy, Terms of Use
-- [ ] Tapping "Send Feedback" opens mailto link
-- [ ] Tapping "Report a Problem" opens mailto link
-- [ ] Tapping "Privacy Policy" opens browser (placeholder URL)
-- [ ] Tapping "Terms of Use" opens browser (placeholder URL)
+- [ ] Tapping "Send Feedback" / "Report a Problem" opens the web /support page
+- [ ] Tapping "Privacy Policy" opens the web /privacy page
+- [ ] Tapping "Terms of Use" opens the web /terms page
 - [ ] Log Out shows confirmation dialog; confirms → returns to login screen
 
 ---
@@ -160,7 +165,7 @@ v1 scope: UCSD only · Expo Go · No payments · No push notifications
 Minimum set of flows to verify before releasing a build:
 
 - [ ] Cold launch → loading spinner → login screen
-- [ ] Magic link login with UCSD `.edu` email works end-to-end
+- [ ] Password login with UCSD `.edu` email works end-to-end
 - [ ] Feed loads and shows listings; swipe left/right both animate correctly
 - [ ] Create a new listing, publish it; listing appears in My Listings
 - [ ] Send a request from the feed; request appears in Requests tab
@@ -182,4 +187,3 @@ Minimum set of flows to verify before releasing a build:
 - No landlord portal — listers manage approvals directly
 - Photos: HEIC format may not display in all Image components (iOS-only format)
 - Storage cleanup: orphaned storage objects from deleted listings are not cleaned up (only replaced photos are cleaned)
-- Privacy Policy and Terms of Use URLs are placeholders — real pages needed before public beta

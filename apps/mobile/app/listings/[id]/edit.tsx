@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { navigateBack } from "@/lib/navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { getListingById, saveListing, type Listing } from "@/lib/listings";
 import { resolvePhotos, replaceListingPhotos, getListingPhotos } from "@/lib/photos";
 import ListingFormFields, {
+  coerceDraftValues,
   defaultFormValues,
   validateForDraft,
   validateForPublish,
@@ -39,7 +41,17 @@ export default function EditListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  function goBack() {
+    navigateBack(
+      router,
+      navigation,
+      undefined,
+      "/(tabs)/my-listings" as Parameters<typeof router.replace>[0]
+    );
+  }
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [values, setValues] = useState<FormValues>(defaultFormValues);
@@ -77,26 +89,27 @@ export default function EditListingScreen() {
     setErrors([]);
     setSubmitting(true);
     try {
+      const v = publish ? values : coerceDraftValues(values);
       const update: TablesUpdate<"listings"> = {
-        title: values.title.trim(),
-        housing_type: values.housing_type,
-        description: values.description.trim(),
-        monthly_rent: Number(values.monthly_rent),
-        security_deposit: values.security_deposit
-          ? Number(values.security_deposit)
+        title: v.title.trim(),
+        housing_type: v.housing_type,
+        description: v.description.trim(),
+        monthly_rent: Number(v.monthly_rent),
+        security_deposit: v.security_deposit
+          ? Number(v.security_deposit)
           : null,
-        utilities_included: values.utilities_included,
-        available_start_date: values.available_start_date,
-        available_end_date: values.available_end_date,
-        lease_status: values.lease_status,
-        neighborhood: values.neighborhood.trim(),
-        address_private: values.address_private.trim() || null,
-        bedrooms: values.bedrooms,
-        bathrooms: values.bathrooms,
-        parking_available: values.parking_available,
-        laundry_available: values.laundry_available,
-        furnished: values.furnished,
-        pets_allowed: values.pets_allowed,
+        utilities_included: v.utilities_included,
+        available_start_date: v.available_start_date,
+        available_end_date: v.available_end_date,
+        lease_status: v.lease_status,
+        neighborhood: v.neighborhood.trim(),
+        address_private: v.address_private.trim() || null,
+        bedrooms: v.bedrooms,
+        bathrooms: v.bathrooms,
+        parking_available: v.parking_available,
+        laundry_available: v.laundry_available,
+        furnished: v.furnished,
+        pets_allowed: v.pets_allowed,
         status: publish ? "published" : "draft",
       };
       await saveListing(id, update);
@@ -129,7 +142,7 @@ export default function EditListingScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={goBack} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Edit Listing</Text>

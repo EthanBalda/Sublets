@@ -27,9 +27,9 @@ export default function SupportPage() {
       <div className="mt-10 space-y-8">
         <Topic title="Account access">
           <p>
-            Sublets uses magic link login — we send a sign-in link to your
-            university email address. Check your spam folder if the link does
-            not arrive within a few minutes.
+            Sublets uses email and password login with your university email
+            address. If email confirmation is required, check your spam folder
+            for the confirmation message.
           </p>
           <p className="mt-2">
             Only students with a supported university email address can access

@@ -115,6 +115,22 @@ export function validateForDraft(v: FormValues): string[] {
   return [];
 }
 
+// The listings table has NOT NULL columns (including the two date columns,
+// which reject empty strings), so drafts get harmless defaults for anything
+// left blank. Mirrors coerceForDraft in the web app; publish re-validates.
+export function coerceDraftValues(v: FormValues): FormValues {
+  const today = toDateStr(new Date());
+  return {
+    ...v,
+    housing_type: v.housing_type || "other",
+    utilities_included: v.utilities_included || "ask_lister",
+    available_start_date: v.available_start_date || today,
+    available_end_date: v.available_end_date || today,
+    neighborhood: v.neighborhood.trim() || "—",
+    lease_status: v.lease_status || "unknown",
+  };
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={s.section}>

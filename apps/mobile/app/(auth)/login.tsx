@@ -46,12 +46,26 @@ export default function LoginScreen() {
         signInError.message.includes("invalid_credentials");
 
       if (isInvalidCreds) {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: trimmedEmail,
           password,
         });
         if (signUpError) {
-          Alert.alert("Error", signUpError.message);
+          const isExisting =
+            /already registered|user already exists/i.test(signUpError.message);
+          Alert.alert(
+            "Error",
+            isExisting
+              ? "Wrong password for this account. Try again."
+              : signUpError.message
+          );
+        } else if (!signUpData.session) {
+          // Email confirmations are enabled — no session until the user
+          // confirms. Without this message the screen would just sit there.
+          Alert.alert(
+            "Check your email",
+            "We sent a confirmation link to your UCSD email. Open it, then sign in here."
+          );
         }
       } else {
         Alert.alert("Error", signInError.message);

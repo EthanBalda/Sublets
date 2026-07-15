@@ -176,6 +176,31 @@ export default function RequestDetailScreen() {
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
+  // Install default checklist items, skipping any already present.
+  // Idempotent, so it doubles as the retry path when the insert failed
+  // during accept (the "Set up checklist" button below).
+  async function installDefaultChecklist(requestId: string): Promise<boolean> {
+    const { data: existing } = await supabase
+      .from("sublet_checklist_items")
+      .select("key")
+      .eq("interest_request_id", requestId);
+
+    const existingKeys = new Set((existing ?? []).map((e) => e.key));
+    const toInsert = DEFAULT_CHECKLIST_ITEMS.filter(
+      (item) => !existingKeys.has(item.key)
+    ).map((item) => ({
+      interest_request_id: requestId,
+      key: item.key,
+      label: item.label,
+    }));
+
+    if (toInsert.length === 0) return true;
+    const { error } = await supabase
+      .from("sublet_checklist_items")
+      .insert(toInsert);
+    return !error;
+  }
+
   async function handleAccept() {
     if (!detail || !profile || submitting) return;
     if (detail.lister_id !== profile.id) return;
@@ -193,34 +218,28 @@ export default function RequestDetailScreen() {
       return;
     }
 
-    // Install default checklist items, skipping any already present.
-    const { data: existing } = await supabase
-      .from("sublet_checklist_items")
-      .select("key")
-      .eq("interest_request_id", detail.id);
-
-    const existingKeys = new Set((existing ?? []).map((e) => e.key));
-    const toInsert = DEFAULT_CHECKLIST_ITEMS.filter(
-      (item) => !existingKeys.has(item.key)
-    ).map((item) => ({
-      interest_request_id: detail.id,
-      key: item.key,
-      label: item.label,
-    }));
-
-    if (toInsert.length > 0) {
-      const { error: checklistErr } = await supabase
-        .from("sublet_checklist_items")
-        .insert(toInsert);
-      if (checklistErr) {
-        Alert.alert(
-          "Accepted",
-          "Request accepted, but checklist setup failed. It can be retried."
-        );
-      }
+    const checklistOk = await installDefaultChecklist(detail.id);
+    if (!checklistOk) {
+      Alert.alert(
+        "Accepted",
+        "Request accepted, but checklist setup failed. Use “Set up checklist” to retry."
+      );
     }
 
     setSubmitting(false);
+    await load();
+  }
+
+  async function handleRetryChecklist() {
+    if (!detail || !profile || submitting) return;
+    if (detail.lister_id !== profile.id) return;
+    setSubmitting(true);
+    const ok = await installDefaultChecklist(detail.id);
+    setSubmitting(false);
+    if (!ok) {
+      Alert.alert("Error", "Couldn't set up the checklist. Try again.");
+      return;
+    }
     await load();
   }
 
@@ -334,10 +353,16 @@ export default function RequestDetailScreen() {
               return;
             }
 
-            await supabase
+            const { error: listingErr } = await supabase
               .from("listings")
               .update({ status: "filled", filled_at: now })
               .eq("id", detail.listing_id);
+            if (listingErr) {
+              Alert.alert(
+                "Completed",
+                "Request completed, but the listing couldn't be marked as filled. You can pause or edit it from My Listings."
+              );
+            }
 
             setCompleting(false);
             await load();
@@ -484,11 +509,26 @@ export default function RequestDetailScreen() {
           {checklistError ? (
             <Text style={styles.checklistErrorText}>{checklistError}</Text>
           ) : checklistItems.length === 0 ? (
-            <Text style={styles.checklistEmpty}>
-              {isLister
-                ? "Checklist not ready. Try accepting again."
-                : "Checklist is being set up by the lister."}
-            </Text>
+            isLister && isAccepted ? (
+              <>
+                <Text style={styles.checklistEmpty}>
+                  Checklist not set up yet.
+                </Text>
+                <Pressable
+                  style={[styles.retryChecklistBtn, submitting && styles.btnDisabled]}
+                  onPress={() => void handleRetryChecklist()}
+                  disabled={submitting}
+                >
+                  <Text style={styles.retryChecklistBtnText}>
+                    Set up checklist
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={styles.checklistEmpty}>
+                Checklist is being set up by the lister.
+              </Text>
+            )
           ) : (
             <>
               {checklistItems.map((item) => {
@@ -680,6 +720,16 @@ const styles = StyleSheet.create({
   // Checklist
   checklistErrorText: { fontSize: 14, color: "#dc2626" },
   checklistEmpty: { fontSize: 14, color: "#aaa", fontStyle: "italic" },
+  retryChecklistBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#208AEF",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  retryChecklistBtnText: { color: "#208AEF", fontSize: 13, fontWeight: "600" },
   checklistRow: {
     flexDirection: "row",
     alignItems: "center",
